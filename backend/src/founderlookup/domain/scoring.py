@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from founderlookup.domain.common import (
     DomainModel,
@@ -19,8 +19,8 @@ from founderlookup.domain.common import (
     VersionId,
 )
 
-FOUNDER_SCORE_SCHEMA_VERSION = "founder-score.v0"
-CLAIM_TRUST_SCHEMA_VERSION = "claim-trust.v0"
+FOUNDER_SCORE_SCHEMA_VERSION: Final = "founder-score.v0"
+CLAIM_TRUST_SCHEMA_VERSION: Final = "claim-trust.v0"
 
 
 class CoverageLevel(StrEnum):
@@ -59,6 +59,9 @@ class FounderScoreFactor(DomainModel):
     rationale: NonBlankStr
 
 
+AnnotatedFactorTuple = tuple[FounderScoreFactor, ...]
+
+
 class FounderScoreSnapshot(DomainModel):
     """Immutable person-level score snapshot that survives across opportunities."""
 
@@ -80,9 +83,6 @@ class FounderScoreSnapshot(DomainModel):
         if len(keys) != len(set(keys)):
             raise ValueError("founder score factor keys must be unique")
         return self
-
-
-AnnotatedFactorTuple = tuple[FounderScoreFactor, ...]
 
 
 class TrustFactorKind(StrEnum):

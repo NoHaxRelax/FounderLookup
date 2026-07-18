@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import StringConstraints, model_validator
 
 from founderlookup.domain.common import (
     DomainModel,
@@ -21,7 +21,7 @@ from founderlookup.domain.common import (
 )
 from founderlookup.domain.scoring import ClaimTrustScore, TrustScoreState
 
-EVIDENCE_GRAPH_SCHEMA_VERSION = "evidence-graph.v0"
+EVIDENCE_GRAPH_SCHEMA_VERSION: Final = "evidence-graph.v0"
 Sha256Hex = Annotated[
     str,
     StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$"),
@@ -32,10 +32,11 @@ class SourceCategory(StrEnum):
     APPLICATION_DECK = "application_deck"
     DEVELOPER_ACTIVITY = "developer_activity"
     PRODUCT_LAUNCH = "product_launch"
+    COMPANY_UPDATE = "company_update"
     HACKATHON = "hackathon"
     RESEARCH = "research"
     PATENT = "patent"
-    ACCELERATOR = "accelerator"
+    ACCELERATOR_COHORT = "accelerator_cohort"
     PUBLIC_SOCIAL = "public_social"
     INTERVIEW = "interview"
     FOLLOW_UP = "follow_up"

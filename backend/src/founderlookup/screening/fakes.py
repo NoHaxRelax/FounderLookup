@@ -10,6 +10,10 @@ class MissingFakeAssessmentError(LookupError):
     """Raised when no fixed assessment exists for an intelligence request."""
 
 
+class InvalidFakeAssessmentError(ValueError):
+    """Raised when seeded assessment data does not describe its request."""
+
+
 class FakeIntelligenceAdapter:
     """Replay schema-valid assessments without selecting a model or framework."""
 
@@ -26,8 +30,17 @@ class FakeIntelligenceAdapter:
         """Return the fixed assessment keyed by ``request.request_id``."""
         self._requests.append(request)
         try:
-            return self._responses[request.request_id]
+            assessment = self._responses[request.request_id]
         except KeyError as error:
             raise MissingFakeAssessmentError(
                 f"No fake assessment for request {request.request_id!r}"
             ) from error
+        if (
+            assessment.input_snapshot_id != request.input_snapshot_id
+            or assessment.identity.mode != request.mode.value
+        ):
+            raise InvalidFakeAssessmentError(
+                f"Fake assessment {assessment.assessment_id!r} does not match request "
+                f"{request.request_id!r}"
+            )
+        return assessment

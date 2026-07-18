@@ -1,6 +1,9 @@
 """Canonical v0 workflow vocabularies; transition policy lives above these enums."""
 
 from enum import StrEnum
+from typing import Final
+
+LIFECYCLE_SCHEMA_VERSION: Final = "lifecycle.v0"
 
 
 class OpportunityOrigin(StrEnum):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Annotated, Any, Generic, Literal, Self, TypeVar
+from typing import Annotated, Any, Final, Literal, Self
 
 from pydantic import (
     AfterValidator,
@@ -16,8 +16,8 @@ from pydantic import (
     model_validator,
 )
 
-CONTRACT_SCHEMA_VERSION = "vc-brain.v0"
-KNOWLEDGE_VALUE_SCHEMA_VERSION = "knowledge-value.v0"
+CONTRACT_SCHEMA_VERSION: Final = "vc-brain.v0"
+KNOWLEDGE_VALUE_SCHEMA_VERSION: Final = "knowledge-value.v0"
 
 
 def _not_blank(value: str) -> str:
@@ -103,17 +103,14 @@ class KnowledgeState(StrEnum):
     CONFLICTED = "conflicted"
 
 
-T = TypeVar("T")
-
-
-class KnowledgeAlternative(DomainModel, Generic[T]):
+class KnowledgeAlternative[T](DomainModel):
     """One source-backed alternative retained by a conflicted value."""
 
     value: T
     evidence_ids: Annotated[tuple[StableId, ...], Field(min_length=1)]
 
 
-class KnowledgeValue(DomainModel, Generic[T]):
+class KnowledgeValue[T](DomainModel):
     """A value whose missingness semantics cannot be collapsed into null."""
 
     schema_version: Literal["knowledge-value.v0"] = KNOWLEDGE_VALUE_SCHEMA_VERSION

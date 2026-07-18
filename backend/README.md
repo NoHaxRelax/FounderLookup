@@ -39,6 +39,17 @@ uv run mypy
 uv build
 ```
 
+The cross-lane baseline is the deterministic contract suite:
+
+```bash
+uv run pytest tests/contract
+```
+
+It validates the frozen v0 domain shapes, provider-neutral fake adapters, and the fictional
+golden sourcing corpus without network access, model calls, or provider credentials. See the
+[parallel development protocol](../docs/parallel-development.md) before changing a shared
+contract or integrating either workstream.
+
 ## Module boundaries and initial ownership
 
 | Path | Responsibility | Initial owner |

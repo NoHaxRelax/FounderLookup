@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -19,8 +19,8 @@ from founderlookup.domain.common import (
 )
 from founderlookup.domain.evidence import DataClassification, Sha256Hex, SourceCategory
 
-DISCOVERY_SCHEMA_VERSION = "discovery.v0"
-ACQUISITION_SCHEMA_VERSION = "acquisition.v0"
+DISCOVERY_SCHEMA_VERSION: Final = "discovery.v0"
+ACQUISITION_SCHEMA_VERSION: Final = "acquisition.v0"
 
 
 class BoundedRetrievalRequest(DomainModel):
@@ -118,12 +118,12 @@ class DiscoveryResult(DomainModel):
     def validate_status(self) -> Self:
         if self.status is CollectionResultStatus.SUCCEEDED and self.failures:
             raise ValueError("succeeded discovery cannot carry failures")
-        if self.status is CollectionResultStatus.PARTIALLY_SUCCEEDED:
-            if not self.leads or not self.failures:
-                raise ValueError("partial discovery requires leads and failures")
-        if self.status is CollectionResultStatus.FAILED:
-            if self.leads or not self.failures:
-                raise ValueError("failed discovery requires failures and no accepted leads")
+        if self.status is CollectionResultStatus.PARTIALLY_SUCCEEDED and (
+            not self.leads or not self.failures
+        ):
+            raise ValueError("partial discovery requires leads and failures")
+        if self.status is CollectionResultStatus.FAILED and (self.leads or not self.failures):
+            raise ValueError("failed discovery requires failures and no accepted leads")
         return self
 
 

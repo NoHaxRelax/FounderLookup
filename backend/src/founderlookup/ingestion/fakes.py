@@ -14,6 +14,10 @@ class MissingFakeResponseError(LookupError):
     """Raised when a replay fake has no response for a request identifier."""
 
 
+class InvalidFakeResponseError(ValueError):
+    """Raised when seeded result data does not describe its request."""
+
+
 class FakeDiscoveryAdapter:
     """Replay fixed discovery results without network or provider dependencies."""
 
@@ -30,11 +34,17 @@ class FakeDiscoveryAdapter:
         """Return the fixed response keyed by ``request.request_id``."""
         self._requests.append(request)
         try:
-            return self._responses[request.request_id]
+            result = self._responses[request.request_id]
         except KeyError as error:
             raise MissingFakeResponseError(
                 f"No fake discovery response for request {request.request_id!r}"
             ) from error
+        if result.request_id != request.request_id:
+            raise InvalidFakeResponseError(
+                f"Fake discovery result {result.result_id!r} does not match request "
+                f"{request.request_id!r}"
+            )
+        return result
 
 
 class FakeAcquisitionAdapter:
@@ -50,11 +60,20 @@ class FakeAcquisitionAdapter:
         return tuple(self._requests)
 
     async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:
-        """Return the fixed response keyed by ``request.request_id``."""
+        """Return the fixed response keyed by ``request.acquisition_request_id``."""
         self._requests.append(request)
         try:
-            return self._responses[request.request_id]
+            result = self._responses[request.acquisition_request_id]
         except KeyError as error:
             raise MissingFakeResponseError(
-                f"No fake acquisition response for request {request.request_id!r}"
+                f"No fake acquisition response for request {request.acquisition_request_id!r}"
             ) from error
+        if (
+            result.acquisition_request_id != request.acquisition_request_id
+            or result.original_url != request.original_url
+        ):
+            raise InvalidFakeResponseError(
+                f"Fake acquisition result {result.result_id!r} does not match request "
+                f"{request.acquisition_request_id!r}"
+            )
+        return result
