@@ -427,7 +427,7 @@ This MVP remains one OpenSpec change because both developers are implementing on
 **Joint integration checkpoints:**
 
 - I1: fake end-to-end Application and Outbound Candidate to human Decision;
-- I2: human-selected live web provider plus source-specific verification;
+- I2: approved live adapter path plus deterministic/import coverage for any remaining demo categories;
 - I3: direct inbound and activated-then-applied outbound converge on full Screening;
 - I4: cold-start, contradiction, partial-provider-failure, founder-status, and outreach-draft demo.
 
@@ -482,7 +482,7 @@ The following work is deliberately outside `build-vc-brain-mvp`. It must be prop
 
 - production schema migrations, richer retention/deletion workflows, malware-service integration, and comprehensive private-file audit history;
 - cursor-stable collection snapshots, standalone CRUD/relationship routes for every domain record, Decision correction/supersession, exhaustive error/rate-limit cases, and broader security testing;
-- scheduled sourcing, deeper crawl/map features, expanded source categories, or a second generic provider;
+- production scheduling and operational monitoring, broader recurring-source coverage, deeper crawl/map features, expanded source categories, or a second generic provider;
 - score and Trust calibration on a larger labeled corpus and numerical intervals only when statistically defensible;
 - exhaustive cross-browser and assistive-technology certification beyond the P0 keyboard, contrast, reflow, forced-colors, reduced-motion, and semantic-state acceptance checks;
 - production multi-tenancy, portfolio workflows, or learned investment weights.

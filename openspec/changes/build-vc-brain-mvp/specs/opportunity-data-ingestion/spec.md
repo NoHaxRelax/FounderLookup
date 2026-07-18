@@ -27,7 +27,7 @@ The system SHALL accept a company name and a valid pitch deck as the only mandat
 - **THEN** the system rejects or quarantines that file with a safe, actionable reason and does not begin screening from its untrusted contents
 
 ### Requirement: Outbound sourcing discovers candidates before fundraising
-The system SHALL support bounded on-demand collection from heterogeneous outbound source categories including developer activity, product launches, hackathons, research or patents, accelerator cohorts, and approved public social signals. The MVP demonstration SHALL include at least one human-selected live adapter—generic or source-specific—and an independent deterministic fixture or import. If a generic provider is selected, a source-specific path SHALL verify at least one authoritative signal so that the demonstration is not dependent on one opaque provider.
+The system SHALL support bounded on-demand collection from heterogeneous outbound source categories including developer activity, product launches, hackathons, research or patents, accelerator cohorts, and approved public social signals, plus one configurable recurring or cron-compatible trigger for at least one approved source. The MVP demonstration SHALL include at least one human-selected live adapter—generic or source-specific—and an independent deterministic fixture or import. If a generic provider is selected, a source-specific path SHALL verify at least one authoritative signal so that the demonstration is not dependent on one opaque provider.
 
 #### Scenario: Public signal creates a candidate
 - **WHEN** an outbound run finds a source-backed signal about a previously unknown Founder, team, or Company
@@ -44,6 +44,10 @@ The system SHALL support bounded on-demand collection from heterogeneous outboun
 #### Scenario: Public social evidence is discovered
 - **WHEN** an approved public social-traction record is supplied through a conforming discovery or source adapter
 - **THEN** the system preserves it as a time-stamped Source Artifact with its data classification, origin, exact locator, and subject relationship
+
+#### Scenario: Recurring scan refreshes Memory
+- **WHEN** the configured recurring trigger invokes the same approved source twice
+- **THEN** both runs remain observable, unchanged artifacts are not duplicated, and any changed source content creates a new time-stamped version linked to its history
 
 ### Requirement: Memory accepts post-discovery enrichment
 The system SHALL ingest approved interviews, follow-up answers, launches, milestones, and other diligence material after discovery or Application while preserving the same Source Artifact, Observation, Evidence, knowledge-state, and provenance rules.
