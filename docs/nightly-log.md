@@ -32,3 +32,27 @@ Scope note: this is in-lane and self-contained. Merging resolved entities into t
 canonical Memory store (SubjectRef / Founder / Company) is the SWE persistence layer
 and a later paired step, so no shared-contract change was made. Confidences are
 heuristic and uncalibrated by design. No NEEDS ELIAS.
+
+## 2026-07-19, cycle 3
+Task 3.4 (the two most foundational score containers): v0 `screening/rubrics.py`
+producing the frozen `ClaimTrustScore` and `FounderScoreSnapshot`, deterministic and
+versioned (`claim-trust-rubric.v0`, `founder-score-rubric.v0`). Ran it as an ultracode
+workflow: 3 diverse-lens design agents (psychometrics / anti-gaming / fairness) ->
+1 synthesis+build agent -> 3 adversarial verifiers. I then read the module myself and
+re-ran the authoritative full gate. Green: 124 tests (45 new), ruff, mypy.
+Design highlights: claim trust picks a STATE before a number (UNSUPPORTED/UNSCORED
+withhold rather than fake a low score); corroboration is positive-only and
+contradiction negative-only, so absence never moves a score; founder score hard-zeroes
+vanity signals (follower reach, pedigree, polish, team size), weights costly-to-fake
+positives, and only a present evidence-backed negative can go sub-baseline; coverage
+touches only provisional/uncertainty, never the arithmetic; cold-start rests at 50, not 0.
+The three invariants (missing-history-never-decrements, reproducible-and-versioned,
+contract-and-no-false-precision) were verified exhaustively (all 4096 trust-signal combos,
+198 founder cases, 200 shuffled orderings x 3 hash seeds -> byte-identical). Commit 61868d8.
+Scope note: this is the [DATA/ML] numeric-weighting half of task 3.4; the thesis-rule,
+contradiction, trend-sufficiency, and decision-readiness rubrics remain for later cycles.
+Two v0 calibrations worth a glance in the morning (not blockers, logged not parked):
+(a) a single costly-to-fake positive under HIGH coverage is LOW-uncertainty yet still
+`provisional` (present_costly < 2) -- confirm that split is intended; (b) founder score
+can reach exactly 100.0 when all costly positives are FULL; v0 permits it via clamp,
+a v1 may want a cap below 100. No NEEDS ELIAS.
