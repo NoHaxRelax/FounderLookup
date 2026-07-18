@@ -1,0 +1,108 @@
+{
+  "index": 2,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 87,
+      "topLeftY": 62,
+      "bottomRightX": 140,
+      "bottomRightY": 81,
+      "content": "Hack-Nation",
+      "type": "header"
+    },
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 542,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 564,
+      "topLeftY": 61,
+      "bottomRightX": 628,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 111,
+      "bottomRightX": 620,
+      "bottomRightY": 143,
+      "content": "**Assessment & Intelligence — the reasoning layer.** Makes or supports every investment decision.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 127,
+      "topLeftY": 150,
+      "bottomRightX": 632,
+      "bottomRightY": 242,
+      "content": "- Operates on top of Memory to produce insights, challenge assumptions, and recommend next steps.\n- Triggered by an inbound application, or by signals crossing a conviction threshold on their own.\n- Transparent about confidence, uncertainty, and the evidence behind every conclusion.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 247,
+      "bottomRightX": 400,
+      "bottomRightY": 264,
+      "content": "**Memory — the data foundation.** Nothing discarded.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 127,
+      "topLeftY": 270,
+      "bottomRightX": 579,
+      "bottomRightY": 351,
+      "content": "- Ingests pitch decks, interviews, launches, GitHub activity, and social traction.\n- Deduplicates, enriches, timestamps, and tags everything by source.\n- Houses the Founder Score — persists across applications, never resets.\n- Surfaces the trend over time, not just the latest snapshot.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 181,
+      "topLeftY": 377,
+      "bottomRightX": 525,
+      "bottomRightY": 682,
+      "content": "![img-0.jpeg](img-0.jpeg)",
+      "type": "image",
+      "imageId": "img-0.jpeg"
+    },
+    {
+      "topLeftX": 104,
+      "topLeftY": 707,
+      "bottomRightX": 614,
+      "bottomRightY": 736,
+      "content": "VC Brain architecture: pipeline stages (Sourcing → Screening → Diligence → Decision) mapped onto the Memory, Intelligence, and Experience layers.",
+      "type": "caption"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 744,
+      "bottomRightX": 279,
+      "bottomRightY": 760,
+      "content": "**The MVP should demonstrate:**",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 765,
+      "bottomRightX": 630,
+      "bottomRightY": 915,
+      "content": "1. **Thesis Engine:** Investor sets sectors, stage, geography, check size, ownership targets, and risk appetite. Every recommendation is filtered and scored through this fund-specific lens.\n2. **Smart Data Collection & Management:** Actively collect, validate, and structure founder and company data from heterogeneous sources — the data layer matters as much as the intelligence built on top of it.\n3. **Multi-Attribute Reasoning:** Move beyond keyword search. Support complex, natural-language queries, e.g. “technical founder, Berlin, AI infra, enterprise traction, no prior VC backing, top-tier accelerator.”",
+      "type": "list"
+    },
+    {
+      "topLeftX": 109,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 3",
+      "type": "footer"
+    }
+  ]
+}

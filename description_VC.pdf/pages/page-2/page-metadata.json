@@ -1,0 +1,139 @@
+{
+  "index": 1,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 87,
+      "topLeftY": 62,
+      "bottomRightX": 140,
+      "bottomRightY": 81,
+      "content": "Hack-Nation",
+      "type": "header"
+    },
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 542,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 564,
+      "topLeftY": 61,
+      "bottomRightX": 628,
+      "bottomRightY": 81,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 119,
+      "bottomRightX": 350,
+      "bottomRightY": 141,
+      "content": "## 1. Motivation / Goal to Achieve",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 152,
+      "bottomRightX": 626,
+      "bottomRightY": 215,
+      "content": "Imagine running the **world's largest Shark Tank for AI innovation**. Thousands of ambitious builders, any one of whom could be building the **next Cursor, whose founders met at an MIT hackathon** before anyone knew to look. Your job: find them first, understand what they're capable of, and back them before the rest of the world catches on.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 221,
+      "bottomRightX": 633,
+      "bottomRightY": 314,
+      "content": "Right now, that's **nearly impossible**. Founders stay invisible until they know the right person. Their story is scattered across pitch decks, GitHub repos, half-built websites, and social posts nobody's reading closely. Diligence takes weeks. Capital flows through networks, not merit. By the time a fund finally sees a founder clearly, dozens of equally strong ones have already given up waiting. Great ideas are dying not for lack of merit, but for lack of a fair shot at being seen.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 320,
+      "bottomRightX": 633,
+      "bottomRightY": 490,
+      "content": "**The fix has to work both ways.** Some founders will be spotted first — for example through a GitHub commit, a hackathon win, a paper worth a phone call. Others won't wait to be discovered: a student with an idea, a first-time founder with zero connections, an engineer who's never pitched anyone in their life, simply applying. Either way, the same thing happens next: within 24 hours, they know if they just got $100K to build it. Not because of who they know, but because of what the system already knows about them — a living profile of skills, experience, and track record that gets sharper with every milestone — a credit score for founders, the Founder Score. This is not just a narrative device: your system should actually produce this score, and use it as one input into every investment decision. Ship something once, and your next idea starts from a stronger position. The system never forgets, and it never stops updating.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 495,
+      "bottomRightX": 617,
+      "bottomRightY": 543,
+      "content": "And you're not an outside observer here — most of you are exactly the founder profile this system is built to find. Build it well, and you'll understand better than almost anyone what actually gets noticed, and walk away with the system you wish had found you.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 548,
+      "bottomRightX": 630,
+      "bottomRightY": 611,
+      "content": "**Ambitious Goal:** Build a data- and AI-first operating system that transforms how venture capital works — discovering exceptional founders, deploying capital at 100× speed, and supporting the next generation of AI entrepreneurs. Identify and track potential founders and teams, deploying $100K checks within 24 hours.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 617,
+      "bottomRightX": 631,
+      "bottomRightY": 650,
+      "content": "Done right, this doesn't just make venture capital faster — it makes it accessible: a founder's potential becomes something the system can see and reason about directly.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 655,
+      "bottomRightX": 626,
+      "bottomRightY": 734,
+      "content": "**The North Star — a fund that runs itself:** The ultimate vision is an autonomous venture fund spanning the entire lifecycle, with one human in the loop for oversight, not execution. This challenge covers Sourcing → Screening → Diligence → Decision. Downstream stages (portfolio monitoring, follow-on, fund ops, exit) are real but out of scope — don't spend hackathon time designing UI for them.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 740,
+      "bottomRightX": 323,
+      "bottomRightY": 762,
+      "content": "## 2. Build the VC Brain (MVP)",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 773,
+      "bottomRightX": 600,
+      "bottomRightY": 806,
+      "content": "The VC Brain is built on three transformative pillars that work in concert to give a single investor the reach and analytical power of an entire organisation.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 811,
+      "bottomRightX": 615,
+      "bottomRightY": 827,
+      "content": "**Sourcing — how do you find the best founders?** The most important part of your MVP.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 126,
+      "topLeftY": 834,
+      "bottomRightX": 571,
+      "bottomRightY": 894,
+      "content": "- Surface the strongest founders before they formally begin fundraising.\n- Judged on data richness and smart sourcing ideas, not polish.\n- Least commercial competition today — go further here than anywhere else.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 108,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 2",
+      "type": "footer"
+    }
+  ]
+}

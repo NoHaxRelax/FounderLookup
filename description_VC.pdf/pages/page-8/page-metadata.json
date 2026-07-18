@@ -1,0 +1,204 @@
+{
+  "index": 7,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 543,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 564,
+      "topLeftY": 61,
+      "bottomRightX": 628,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 110,
+      "bottomRightX": 649,
+      "bottomRightY": 180,
+      "content": "|  Section | Should Include  |\n| --- | --- |\n|  Exit perspective | Plausible exit paths (strategic acquirers, PE roll-up, category comparables) and why they'd pay a premium  |",
+      "type": "table",
+      "tableId": null
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 197,
+      "bottomRightX": 115,
+      "bottomRightY": 212,
+      "content": "## FAQ",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 228,
+      "bottomRightX": 571,
+      "bottomRightY": 245,
+      "content": "### 1. What does a winning sourcing layer actually do that a filtered list doesn't?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 245,
+      "bottomRightX": 586,
+      "bottomRightY": 306,
+      "content": "It surfaces founders before they start fundraising. Outbound scans GitHub, launches, hackathons, papers/patents, and accelerator cohorts, scores them like an inbound application, and triggers real outreach. The brief flags this as the area with the least commercial competition — go further here than anywhere else.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 319,
+      "bottomRightX": 571,
+      "bottomRightY": 335,
+      "content": "### 2. If we can only nail one thing, sourcing or the reasoning layer, which wins?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 335,
+      "bottomRightX": 628,
+      "bottomRightY": 381,
+      "content": "Sourcing carries the most weight (Data Architecture 30%) and is explicitly the priority. But a rich data layer with no honest reasoning on top scores poorly too. Build sourcing deep, then a thin-but-transparent Intelligence layer over it — not a polished reasoner over shallow data.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 396,
+      "bottomRightX": 279,
+      "bottomRightY": 412,
+      "content": "### 3. Is there a provided dataset?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 412,
+      "bottomRightX": 627,
+      "bottomRightY": 459,
+      "content": "No. Bring or synthesize your own — public web data (Crunchbase, LinkedIn, GitHub, ProductHunt, Hacker News, arXiv, patents), synthetic profiles with seeded contradictions, or fictional decks. Ingestion quality beats dataset size.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 472,
+      "bottomRightX": 350,
+      "bottomRightY": 488,
+      "content": "### 4. What's the minimum application input?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 488,
+      "bottomRightX": 630,
+      "bottomRightY": 520,
+      "content": "Deck + company name. Add fields only if genuinely needed for a confident 24-hour decision. Over-collecting works against you.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 533,
+      "bottomRightX": 506,
+      "bottomRightY": 549,
+      "content": "### 5. Can we just average the three screening axes into one number?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 549,
+      "bottomRightX": 633,
+      "bottomRightY": 595,
+      "content": "No — the brief says explicitly not averaged. Founder, Market, and Idea-vs-Market are scored independently, each with a trend direction, and each feeds the memo separately. Collapsing them hides exactly the disagreement an investor needs to see.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 610,
+      "bottomRightX": 523,
+      "bottomRightY": 627,
+      "content": "### 6. Founder Score vs. the 3-axis score — aren't these the same thing?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 627,
+      "bottomRightX": 627,
+      "bottomRightY": 673,
+      "content": "No. The Founder Score lives in Memory, persists across applications, and never resets — it follows the person across different startups over time. The 3-axis score is per-opportunity. The Founder Score is one input into the Founder axis, not a substitute for it.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 687,
+      "bottomRightX": 409,
+      "bottomRightY": 703,
+      "content": "### 7. Is the Trust Score one number for the company?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 703,
+      "bottomRightX": 630,
+      "bottomRightY": 749,
+      "content": "No — it's per claim. Each assertion (traction, revenue, team, market size) traces to evidence with a confidence level, verified externally where possible, with contradictions flagged before they reach the investor.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 763,
+      "bottomRightX": 385,
+      "bottomRightY": 780,
+      "content": "### 8. Which memo sections are actually required?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 780,
+      "bottomRightX": 613,
+      "bottomRightY": 810,
+      "content": "Company snapshot, Investment hypotheses, SWOT, Problem & product, Traction & KPIs. The rest are welcome but optional — and padding counts against you.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 824,
+      "bottomRightX": 513,
+      "bottomRightY": 841,
+      "content": "### 9. What do we do when real financials or cap table data don't exist?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 841,
+      "bottomRightX": 613,
+      "bottomRightY": 871,
+      "content": "Don't fabricate. Flag the gap explicitly ('Cap table: not disclosed'). A memo that marks its own gaps is scored as more trustworthy, not less.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 886,
+      "bottomRightX": 610,
+      "bottomRightY": 902,
+      "content": "### 10. How do you score a first-time founder with no GitHub, no funding, no network?",
+      "type": "title"
+    },
+    {
+      "topLeftX": 108,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 8",
+      "type": "footer"
+    }
+  ]
+}

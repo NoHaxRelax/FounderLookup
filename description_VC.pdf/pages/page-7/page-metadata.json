@@ -1,0 +1,76 @@
+{
+  "index": 6,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 183,
+      "topLeftY": 64,
+      "bottomRightX": 543,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 564,
+      "topLeftY": 61,
+      "bottomRightX": 628,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 112,
+      "bottomRightX": 366,
+      "bottomRightY": 135,
+      "content": "## Appendix 1 — Investment Memo",
+      "type": "title"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 146,
+      "bottomRightX": 615,
+      "bottomRightY": 178,
+      "content": "*Length rule: As detailed as the decision requires, as brief as clarity allows. Length is not a proxy for rigor — padding counts against you.*",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 189,
+      "bottomRightX": 251,
+      "bottomRightY": 205,
+      "content": "### How to use this checklist:",
+      "type": "title"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 208,
+      "bottomRightX": 628,
+      "bottomRightY": 362,
+      "content": "The sections below represent what a complete investment memo should cover. For this challenge, treat Company snapshot, Investment hypotheses, SWOT, Problem & product, and Traction & KPIs as required. Some sections — particularly Financials & round structure, Cap table, and anything involving internal company data — depend on information a real fund would treat as confidential or simply might not have at the time of drafting. You are not expected to fabricate this data convincingly. Where a data point is missing, unavailable, or intentionally left out, it must be explicitly flagged in the memo (e.g. “Cap table: not disclosed” or “Customer references: unavailable at this stage”) rather than silently omitted or guessed. A memo that clearly marks its own gaps is more trustworthy — and more useful to an investor — than one that fills them in invisibly.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 366,
+      "bottomRightX": 649,
+      "bottomRightY": 920,
+      "content": "|  Section | Should include  |\n| --- | --- |\n|  Company snapshot | One-paragraph “in a nutshell”: market size, the structural problem, why it’s urgent, and how the product solves it  |\n|  Investment hypotheses | The explicit “why we want to invest” bullets — team quality, market wedge, stickiness / retention mechanics, traction signal, defensibility, expansion path  |\n|  SWOT | Strengths, weaknesses, opportunities, risks — each as short, evidence-backed bullets  |\n|  Team & history | Founder background, exec team pedigree, why the fund is comfortable with any red flags (e.g. single-founder), company timeline from founding to today  |\n|  Problem & product | The core problem(s) in plain language, then the step-by-step product / process solving it  |\n|  Technology & defensibility | What’s proprietary vs. commoditizable, the data moat, model / architecture choices, why the advantage compounds over time  |\n|  Market sizing | Top-down and / or bottom-up TAM / SAM / SOM, with the assumptions stated explicitly  |\n|  Competition | Named competitor clusters, how each differs from the company, and who could become a threat later  |\n|  Traction & KPIs | Customer count, ARR / revenue, growth trajectory, unit economics (CAC, sales cycle, churn), usage metrics (e.g. DAU)  |\n|  Financials & round structure | Historical + projected P&L (revenue, EBITDA, opex, COGS), round size, runway, next-round timing  |\n|  Cap table | Pre- and post-round ownership by party, dilution assumptions, VSOP allocation  |\n|  Due diligence log | What was checked (commercial, people, financial, legal, technical), what’s still open  |",
+      "type": "table",
+      "tableId": null
+    },
+    {
+      "topLeftX": 108,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 7",
+      "type": "footer"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "index": 3,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 87,
+      "topLeftY": 62,
+      "bottomRightX": 141,
+      "bottomRightY": 82,
+      "content": "Hack-Nation",
+      "type": "header"
+    },
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 542,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 564,
+      "topLeftY": 61,
+      "bottomRightX": 628,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 111,
+      "bottomRightX": 389,
+      "bottomRightY": 128,
+      "content": "#### 4. Inbound: Application & Automated Screening",
+      "type": "text"
+    },
+    {
+      "topLeftX": 127,
+      "topLeftY": 133,
+      "bottomRightX": 630,
+      "bottomRightY": 203,
+      "content": "- **Apply:** deck + company name is the minimum bar; any further fields are the minimum needed for a confident 24-hour decision.\n- **Screen:** a fast first-pass filter removes clearly non-viable ideas before full analysis begins.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 209,
+      "bottomRightX": 394,
+      "bottomRightY": 225,
+      "content": "#### 5. Outbound: Founder Identification & Activation",
+      "type": "text"
+    },
+    {
+      "topLeftX": 127,
+      "topLeftY": 230,
+      "bottomRightX": 617,
+      "bottomRightY": 338,
+      "content": "- **Identify:** continuously scan GitHub, launches, hackathons, papers / patents, and accelerator cohorts — scored the same way as an inbound application.\n- **Activate:** reach out to the strongest matches directly. Cold outreach, not cold investment — the goal is to trigger a real application.\n- **Converge:** activated applications flow into the same Screening step as inbound, so both tracks feed one funnel.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 343,
+      "bottomRightX": 622,
+      "bottomRightY": 374,
+      "content": "#### 6. Multi-Axis Screening: Every opportunity is scored along three independent axes — not averaged:",
+      "type": "text"
+    },
+    {
+      "topLeftX": 127,
+      "topLeftY": 381,
+      "bottomRightX": 628,
+      "bottomRightY": 493,
+      "content": "- **Founder:** who they are, their traits and track record.\n- **Market:** sizing, competitors, SWOT — rated bullish, neutral, or bear.\n- **Idea vs. Market:** does the idea survive scrutiny as-is, or is the team strong enough to pivot?\n- Each axis also shows trend (improving / declining / stable) and feeds back into Memory to sharpen future scoring.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 498,
+      "bottomRightX": 628,
+      "bottomRightY": 559,
+      "content": "#### 7. Evidence-Backed Investment Memos & Trust Score: Every claim — traction, revenue, team background, market size — must trace to evidence with a confidence level: a Trust Score. Verify externally where possible and flag contradictions before they reach the investor.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 567,
+      "bottomRightX": 589,
+      "bottomRightY": 612,
+      "content": "#### 8. Investor-Grade UX: Intuitive enough to use without technical support. Notion-level approachability, Bloomberg-level analytical depth — clarity and usability are non-negotiable.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 109,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 4",
+      "type": "footer"
+    }
+  ]
+}

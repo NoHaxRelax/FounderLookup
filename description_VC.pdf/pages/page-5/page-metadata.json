@@ -1,0 +1,124 @@
+{
+  "index": 4,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 87,
+      "topLeftY": 62,
+      "bottomRightX": 140,
+      "bottomRightY": 81,
+      "content": "Hack-Nation",
+      "type": "header"
+    },
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 542,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 562,
+      "topLeftY": 61,
+      "bottomRightX": 629,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 236,
+      "topLeftY": 123,
+      "bottomRightX": 489,
+      "bottomRightY": 451,
+      "content": "![img-1.jpeg](img-1.jpeg)",
+      "type": "image",
+      "imageId": "img-1.jpeg"
+    },
+    {
+      "topLeftX": 109,
+      "topLeftY": 470,
+      "bottomRightX": 607,
+      "bottomRightY": 496,
+      "content": "End-to-end flow from inbound and outbound sourcing through 3-axis screening, diligence, and the final investment decision.",
+      "type": "caption"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 507,
+      "bottomRightX": 225,
+      "bottomRightY": 527,
+      "content": "### 3. Stretch Goals",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 539,
+      "bottomRightX": 250,
+      "bottomRightY": 555,
+      "content": "We know that you can do it!",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 561,
+      "bottomRightX": 631,
+      "bottomRightY": 608,
+      "content": "1. **Agentic Traceability:** Every recommendation must cite the exact data point — pitch deck slide, web signal, or interview excerpt — that drove the conclusion. If the system recommends a founder, it must show precisely what justified the Trust Score.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 104,
+      "topLeftY": 613,
+      "bottomRightX": 586,
+      "bottomRightY": 645,
+      "content": "*Hint: implement step-level chain-of-thought logging to visualise the full reasoning process.*",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 652,
+      "bottomRightX": 634,
+      "bottomRightY": 797,
+      "content": "2. **Self-Correction Loops:** Implement a Validator Agent that cross-references extracted founder claims against market databases, comparable funding rounds, and observable evidence to ensure the primary agent is not hallucinating.\n3. **Sourcing & Network Intelligence:** Model the sourcing graph — the network of programs, institutions, and individuals through which promising founders become visible — and track which channels historically produce the strongest opportunities. Proactively suggest underexplored sourcing channels based on what has worked before, and once a founder converts into a funded deal, feed that outcome back into the model so it learns which channels generate quality, not just volume.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 804,
+      "bottomRightX": 267,
+      "bottomRightY": 823,
+      "content": "### 4. Areas of Research",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 836,
+      "bottomRightX": 609,
+      "bottomRightY": 868,
+      "content": "Genuinely open problems. Solving them robustly could be industry-defining — document your approach if you crack one.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 874,
+      "bottomRightX": 629,
+      "bottomRightY": 907,
+      "content": "1. **Confidence Scoring:** Founder data is messy and incomplete. Can prediction intervals be built around soft-skill assessments like resilience or founder-market fit?",
+      "type": "list"
+    },
+    {
+      "topLeftX": 109,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 5",
+      "type": "footer"
+    }
+  ]
+}

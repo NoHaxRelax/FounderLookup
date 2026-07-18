@@ -1,0 +1,163 @@
+{
+  "index": 5,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 87,
+      "topLeftY": 62,
+      "bottomRightX": 140,
+      "bottomRightY": 82,
+      "content": "Hack-Nation",
+      "type": "header"
+    },
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 542,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 562,
+      "topLeftY": 61,
+      "bottomRightX": 629,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 111,
+      "bottomRightX": 612,
+      "bottomRightY": 180,
+      "content": "**2. Data Quality vs. Volume:** More data isn't always better — how do you decide what's worth collecting vs. flagging as low-confidence?\n\n**3. Founder Traits & Success:** How much can public footprints (Twitter, LinkedIn) predict founder success — and how would you test it?",
+      "type": "list"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 189,
+      "bottomRightX": 288,
+      "bottomRightY": 209,
+      "content": "## 5. Hints and Resources",
+      "type": "title"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 227,
+      "bottomRightX": 116,
+      "bottomRightY": 242,
+      "content": "### Data",
+      "type": "title"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 246,
+      "bottomRightX": 622,
+      "bottomRightY": 309,
+      "content": "No dedicated dataset is provided. Bring or synthesise your own founder and company data — public web data (Crunchbase, LinkedIn, GitHub, ProductHunt, Hacker News, arXiv, patents), synthetic founder profiles with seeded contradictions, or anonymised / fictional pitch decks. Quality of ingestion matters more than dataset size.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 315,
+      "bottomRightX": 597,
+      "bottomRightY": 346,
+      "content": "**Investment Memo — see Appendix 1:** A sample checklist for the structure and depth expected — not a template to fill in mechanically.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 355,
+      "bottomRightX": 268,
+      "bottomRightY": 374,
+      "content": "## 6. Evaluation Criteria",
+      "type": "title"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 387,
+      "bottomRightX": 612,
+      "bottomRightY": 433,
+      "content": "**Data Architecture and Intelligence (30%):** How well does the system collect, structure, and manage founder data? We look for smart ingestion, deduplication, enrichment, and a reasoning layer that is honest about what it knows and what it does not.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 440,
+      "bottomRightX": 598,
+      "bottomRightY": 472,
+      "content": "*Note: generic ingestion / enrichment quality alone will not score highly here if it doesn't address the cold-start, pre-track-record case.*",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 479,
+      "bottomRightX": 590,
+      "bottomRightY": 527,
+      "content": "**Intelligent Analysis and Trust (25%):** How effectively does the solution synthesise fragmented signals into decision-ready insights? Do the memo's Trust Scores surface evidence and uncertainty transparently?",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 532,
+      "bottomRightX": 627,
+      "bottomRightY": 594,
+      "content": "**Investment Utility & Execution (30%):** Does the tool produce a recommendation a human investor could genuinely act on within 24 hours? This includes any progress on instrumenting how fast and reliably an opportunity moves from first signal to decision. Could it transform the speed and quality of capital allocation?",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 600,
+      "bottomRightX": 579,
+      "bottomRightY": 647,
+      "content": "**User Experience and Design (15%):** Is the interface intuitive, clear, and beautifully designed? Does it make complex AI reasoning feel effortless and trustworthy for a non-technical investor?",
+      "type": "text"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 655,
+      "bottomRightX": 232,
+      "bottomRightY": 677,
+      "content": "## 7. Why It Matters",
+      "type": "title"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 689,
+      "bottomRightX": 597,
+      "bottomRightY": 719,
+      "content": "**Not just another investment tool:** transformative infrastructure for the venture capital industry.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 96,
+      "topLeftY": 726,
+      "bottomRightX": 627,
+      "bottomRightY": 827,
+      "content": "- Today, capital flows to who you know — not what you're building.\n- A system that surfaces exceptional founders before anyone else sees them could reshape how the world's most important companies get their start.\n- You are building infrastructure for Equitable Capital Allocation — turning a relationship-gated landscape into a living intelligence network that knows who the next Cursor is, and ensures they get funded.",
+      "type": "list"
+    },
+    {
+      "topLeftX": 82,
+      "topLeftY": 835,
+      "bottomRightX": 622,
+      "bottomRightY": 869,
+      "content": "***Build the data layer. Build the reasoning layer. Build the experience. Build the infrastructure that gives exceptional founders the capital to begin.***",
+      "type": "text"
+    },
+    {
+      "topLeftX": 109,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 6",
+      "type": "footer"
+    }
+  ]
+}

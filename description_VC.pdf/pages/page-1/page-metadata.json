@@ -1,0 +1,83 @@
+{
+  "index": 0,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 325,
+      "topLeftY": 95,
+      "bottomRightX": 443,
+      "bottomRightY": 119,
+      "content": "Hack-Nation",
+      "type": "text"
+    },
+    {
+      "topLeftX": 188,
+      "topLeftY": 141,
+      "bottomRightX": 528,
+      "bottomRightY": 154,
+      "content": "In collaboration with MIT Club of Northern California and MIT Club of Germany",
+      "type": "text"
+    },
+    {
+      "topLeftX": 306,
+      "topLeftY": 220,
+      "bottomRightX": 411,
+      "bottomRightY": 234,
+      "content": "CHALLENGE",
+      "type": "text"
+    },
+    {
+      "topLeftX": 233,
+      "topLeftY": 272,
+      "bottomRightX": 489,
+      "bottomRightY": 428,
+      "content": "02",
+      "type": "text"
+    },
+    {
+      "topLeftX": 219,
+      "topLeftY": 546,
+      "bottomRightX": 498,
+      "bottomRightY": 584,
+      "content": "## The VC Brain:",
+      "type": "title"
+    },
+    {
+      "topLeftX": 235,
+      "topLeftY": 591,
+      "bottomRightX": 481,
+      "bottomRightY": 610,
+      "content": "*Deploying $100K Checks in 24 Hours*",
+      "type": "text"
+    },
+    {
+      "topLeftX": 306,
+      "topLeftY": 659,
+      "bottomRightX": 411,
+      "bottomRightY": 674,
+      "content": "POWERED BY",
+      "type": "text"
+    },
+    {
+      "topLeftX": 206,
+      "topLeftY": 687,
+      "bottomRightX": 510,
+      "bottomRightY": 713,
+      "content": "MASCHMEYER GROUP",
+      "type": "text"
+    },
+    {
+      "topLeftX": 152,
+      "topLeftY": 784,
+      "bottomRightX": 565,
+      "bottomRightY": 801,
+      "content": "**Maschmeyer Group — Investing in Exceptional Founders**",
+      "type": "text"
+    }
+  ]
+}

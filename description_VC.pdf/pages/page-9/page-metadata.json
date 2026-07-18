@@ -1,0 +1,139 @@
+{
+  "index": 8,
+  "dimensions": {
+    "dpi": 87,
+    "height": 1018,
+    "width": 721
+  },
+  "confidenceScores": null,
+  "blocks": [
+    {
+      "topLeftX": 184,
+      "topLeftY": 64,
+      "bottomRightX": 543,
+      "bottomRightY": 79,
+      "content": "THE VC BRAIN · MASCHMEYER GROUP × Hack-Nation · Challenge Brief",
+      "type": "header"
+    },
+    {
+      "topLeftX": 564,
+      "topLeftY": 61,
+      "bottomRightX": 628,
+      "bottomRightY": 79,
+      "content": "MASCHMEYER GROUP",
+      "type": "header"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 111,
+      "bottomRightX": 630,
+      "bottomRightY": 174,
+      "content": "This is the cold-start case, and the brief warns that generic ingestion/enrichment won't score highly if it ignores it. You need an explicit method for pre-track-record founders — otherwise you've just rebuilt the network-gated system the challenge exists to replace. Don't leave this as an afterthought.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 189,
+      "bottomRightX": 592,
+      "bottomRightY": 220,
+      "content": "### **11. Is there a way to push the cold-start problem further, beyond just handling it competently?**",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 220,
+      "bottomRightX": 625,
+      "bottomRightY": 312,
+      "content": "Yes — worth attempting Area of Research 3: how much can public footprints (Twitter, LinkedIn) actually predict founder success, and how would you test it. It's framed as genuinely open, but it's also the most direct lever on the cold-start weakness in Q10 — a founder with no funding or GitHub history often still has a public footprint. Teams that take a real stab at this, even partially, are documenting exactly the kind of approach the brief says could be industry-defining.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 326,
+      "bottomRightX": 528,
+      "bottomRightY": 342,
+      "content": "### **12. How natural-language does Multi-Attribute Reasoning need to be?**",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 342,
+      "bottomRightX": 620,
+      "bottomRightY": 388,
+      "content": "Beyond keyword/filter search. It should resolve a compound query like 'technical founder, Berlin, AI infra, enterprise traction, no prior VC backing, top-tier accelerator' in one pass — not as five manual filters.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 403,
+      "bottomRightX": 481,
+      "bottomRightY": 419,
+      "content": "### **13. Which stretch goal is worth it if we only have time for one?**",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 419,
+      "bottomRightX": 612,
+      "bottomRightY": 465,
+      "content": "Agentic Traceability — citing the exact data point (deck slide, web signal, interview line) behind each conclusion. It directly reinforces the core Trust Score requirement, so it's the highest-leverage add.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 480,
+      "bottomRightX": 455,
+      "bottomRightY": 495,
+      "content": "### **14. How much does UI polish matter under time pressure?**",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 495,
+      "bottomRightX": 612,
+      "bottomRightY": 541,
+      "content": "UX is 15% — real, but the smallest slice. 'Notion-level approachability, Bloomberg-level analytical depth,' usable without technical support. If forced to trade, protect the data and reasoning layers (55% combined) first.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 556,
+      "bottomRightX": 551,
+      "bottomRightY": 572,
+      "content": "### **15. Should the Thesis Engine be hardcoded to one fund, or configurable?**",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 572,
+      "bottomRightX": 613,
+      "bottomRightY": 618,
+      "content": "Configurable. The investor sets sectors, stage, geography, check size, ownership targets, and risk appetite, and every recommendation is filtered and scored through that lens. A hardcoded thesis misses the point of the pillar.",
+      "type": "text"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 633,
+      "bottomRightX": 454,
+      "bottomRightY": 648,
+      "content": "### **16. Do we need to build toward the 'fund that runs itself'?**",
+      "type": "title"
+    },
+    {
+      "topLeftX": 83,
+      "topLeftY": 648,
+      "bottomRightX": 620,
+      "bottomRightY": 695,
+      "content": "No — that's ambition framing, not a deliverable. The scope is Sourcing → Screening → Diligence → Decision. The brief explicitly says don't spend hackathon time on downstream stages (monitoring, follow-on, fund ops, exit).",
+      "type": "text"
+    },
+    {
+      "topLeftX": 109,
+      "topLeftY": 959,
+      "bottomRightX": 607,
+      "bottomRightY": 973,
+      "content": "Hack-Nation × MIT Club of Northern California × MIT Club of Germany · 6th Global AI Hackathon · Page 9",
+      "type": "footer"
+    }
+  ]
+}
