@@ -14,7 +14,8 @@ Python 3.12 is pinned in `.python-version`; `uv` can install it automatically wh
 ## Set up and run
 
 ```bash
-uv sync
+uv lock --check
+uv sync --frozen
 cp .env.example .env
 uv run uvicorn founderlookup.main:app --reload
 ```
@@ -57,4 +58,3 @@ contracts and must not leak provider payload types into `domain/`.
 Do not add Tavily, Exa, a model-provider SDK, LangGraph, LangChain, LlamaIndex, or an alternative
 orchestration framework until its OpenSpec human gate is completed and recorded. Deterministic
 fakes and framework-neutral interfaces come first.
-

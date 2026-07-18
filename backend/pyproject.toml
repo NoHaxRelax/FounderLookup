@@ -6,7 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115,<1",
-    "uvicorn[standard]>=0.34,<1",
+    "pydantic>=2,<3",
+    "uvicorn>=0.34,<1",
 ]
 
 [dependency-groups]
@@ -58,4 +59,3 @@ select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
 python_version = "3.12"
 strict = true
 files = ["src", "tests"]
-
