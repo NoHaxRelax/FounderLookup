@@ -5,6 +5,7 @@ Promising founders are currently discovered through fragmented signals and evalu
 ## What Changes
 
 - Introduce a durable Memory layer that accepts the minimum inbound application (company name and deck), discovers outbound candidates from heterogeneous public signals, preserves source provenance, resolves identities, deduplicates records, and retains history rather than only the latest snapshot.
+- Extract accepted pitch decks through a provider-neutral page-extraction seam with deterministic tests and a human-selected Mistral OCR 4 adapter; keep original decks private, persist the concrete OCR model/version and page locators, and default real private-deck transfer off until the approved Mistral data controls are confirmed.
 - Introduce a common opportunity-screening capability in which direct inbound Applications and Applications later submitted by activated Outbound Candidates enter the same screening, diligence, and decision funnel.
 - Make the investor thesis configurable across sector, stage, geography, check size, ownership target, and risk appetite, with each criterion explicitly configured as a hard constraint, a scored preference, or no preference.
 - Combine explainable deterministic eligibility and ranking rules with framework-neutral model/agent analysis. Produce a persistent per-person Founder Score, three independent per-opportunity axes, per-claim Trust Scores, evidence citations, contradictions, explicit unknowns, and a concise investment memo.
@@ -13,7 +14,7 @@ Promising founders are currently discovered through fragmented signals and evalu
 - Instrument elapsed time and failures from first signal or application through decision readiness to demonstrate the 24-hour target.
 - Organize implementation as contract-first parallel workstreams for an SWE and a Data/ML specialist, with shared domain schemas, fake adapters, contract tests, and frequent integration through this single OpenSpec change.
 - Keep generic web discovery behind a replaceable adapter and require a recorded human selection before committing P0 to exactly one of Tavily, Exa, another provider, or no generic provider; a source-specific live path remains available, and a two-provider runtime is deferred.
-- Keep portfolio monitoring, follow-on investing, fund operations, exit-management UI, autonomous outreach, actual money movement, and any unreviewed commitment to a model provider or agent-orchestration framework out of this MVP.
+- Keep portfolio monitoring, follow-on investing, fund operations, exit-management UI, autonomous outreach, actual money movement, and any unreviewed commitment to an investment-intelligence model provider or agent-orchestration framework out of this MVP. The narrow Mistral OCR selection does not approve model-backed investment analysis.
 
 ## Capabilities
 
@@ -33,5 +34,6 @@ None.
 - Establishes the initial application architecture and shared domain contracts for founders, companies, opportunities, thesis criteria, evidence, claims, assessments, pipeline runs, memos, and decisions.
 - Adds a Python backend built and managed with a project-local `pyproject.toml`, `uv`, and FastAPI, plus future frontend code selected independently of this proposal.
 - Introduces external-source adapters; Tavily and Exa are candidate web discovery/content providers subject to a human-reviewed bake-off, while source-specific APIs and fixtures remain necessary for authoritative and reproducible signals.
-- Introduces model-provider and agent-orchestration seams but deliberately blocks framework-specific implementation until a human coder/reviewer selects an approach.
+- Selects Mistral OCR 4 for page-addressable deck extraction behind a provider-neutral seam while keeping real private-deck transfer opt-in and policy controlled.
+- Introduces investment-intelligence model-provider and agent-orchestration seams but deliberately blocks framework-specific implementation until a human coder/reviewer selects an approach.
 - Creates privacy, licensing, bias, cost, security, and audit obligations for public founder data, uploaded decks, external APIs, and generated analysis.

@@ -2,7 +2,7 @@
 
 The repository is greenfield except for the extracted hackathon brief and OpenSpec configuration. The brief makes Sourcing the most important MVP pillar, requires the Founder Score to persist across opportunities, requires three independent opportunity axes, and attaches Trust Score to individual claims. It accepts company name plus deck as the minimum inbound Application and expects outbound discovery to lead to outreach and a real Application before both paths converge on full Screening.
 
-The user selected Python, a project-owned `pyproject.toml`, `uv`, and FastAPI for the backend. No frontend technology, model provider, agent-orchestration framework, or generic web discovery provider has been selected. Tavily and Exa are available candidates for outbound web discovery/content acquisition and require a human-reviewed bake-off.
+The user selected Python, a project-owned `pyproject.toml`, `uv`, and FastAPI for the backend. Mistral OCR 4 is selected narrowly for pitch-deck extraction, using the configurable `mistral-ocr-latest` alias while persisting the concrete model returned by each run. No frontend technology, investment-intelligence model provider, agent-orchestration framework, or generic web discovery provider has been selected. Tavily and Exa are available candidates for outbound web discovery/content acquisition and require a human-reviewed bake-off.
 
 The stakeholders are:
 
@@ -168,6 +168,16 @@ Source Artifacts are immutable versions. Observations record what a particular s
 
 Historical observations and Founder Score snapshots are append-only. An approved retention or deletion action can remove protected content, but the action remains auditable and dependent derived records become unavailable rather than silently changing truth.
 
+#### Mistral OCR is a narrow ingestion adapter
+
+The SWE owner (`DiaRar`) owns the real Mistral OCR adapter. Intake first validates and privately stores the original PDF, then calls a provider-neutral page-extraction interface. Deterministic tests use a fake extractor; the production adapter uses Mistral's stateless `/v1/ocr` endpoint with a configurable model default of `mistral-ocr-latest`. Each accepted result records the concrete returned model, page index, Markdown text, optional page confidence, usage metadata, input hash, and extraction time so Evidence can cite the immutable original deck and exact page. OCR output is an Observation input, not primary Evidence by itself.
+
+The adapter sends bounded PDF bytes directly in the stateless OCR request and does not use a public deck URL, Mistral Files API, Batch API, or another stateful upload path. `MISTRAL_API_KEY` remains server-side. Real founder-private decks are disabled by default and may be sent only when an explicit runtime policy confirms the approved account's training opt-out, retention or Zero Data Retention posture, permitted region, and collection purpose. Until that confirmation, live calls are limited to fictional or otherwise approved test documents; intake still preserves the original deck and leaves extracted fields Unknown if OCR is unavailable or blocked.
+
+This selection does not approve Mistral or any other provider for market, founder, idea, validation, memo, query-planning, or agentic investment analysis. Those uses remain behind the later human model/orchestration gate.
+
+Official implementation and policy references: [Mistral OCR endpoint](https://docs.mistral.ai/api/endpoint/ocr), [Mistral OCR processor](https://docs.mistral.ai/studio-api/document-processing/basic_ocr), [privacy and data controls](https://docs.mistral.ai/admin/monitor-comply/privacy-data-controls), and [Zero Data Retention eligibility](https://help.mistral.ai/en/articles/347612-can-i-activate-zero-data-retention-zdr).
+
 **Alternatives considered:**
 
 - Store only the latest normalized profile: rejected because trends, contradictions, and reproducibility would be lost.
@@ -277,9 +287,9 @@ Persist auditable execution data: input snapshot, source references, rule outcom
 - Treat a framework checkpoint store as business Memory: rejected because retries and conversational state are not authoritative founder facts.
 - Log raw chain-of-thought: rejected because citations, structured decisions, and validation summaries provide useful auditability without exposing hidden reasoning.
 
-### 9. Enforce a human model/orchestration-selection gate
+### 9. Enforce a human investment-intelligence model/orchestration-selection gate
 
-No runtime implementation task may select, add, import, or configure a model provider or LangGraph, LangChain, LlamaIndex, or another agent-orchestration framework until a human coder/reviewer explicitly approves the named choices and records the decision. Plain Python orchestration is included as an option, not merely a fallback; using a model through plain Python still requires the model-provider decision.
+Except for the separately approved, ingestion-only Mistral OCR adapter above, no runtime implementation task may select, add, import, or configure an investment-intelligence model provider or LangGraph, LangChain, LlamaIndex, or another agent-orchestration framework until a human coder/reviewer explicitly approves the named choices and records the decision. Plain Python orchestration is included as an option, not merely a fallback; using an analysis model through plain Python still requires the model-provider decision.
 
 Before that gate, the Data/ML owner may run isolated evaluation probes through the framework-neutral harness after a credential, terms, and data-use preflight. These probes do not add SDKs or configuration to the runtime project. They use synthetic or fictional decks and profiles unless a human has explicitly approved a candidate provider's private-data policy. Inaccessible candidates are marked `not_live_tested` and may be desk-reviewed; the gate evidence must make that limitation visible.
 
@@ -460,7 +470,7 @@ This is a greenfield change, so migration means staged construction rather than 
 2. Review and commit the OpenSpec artifacts, schema shapes/version identifiers, deterministic fixtures, and shared contract tests through the team's normal user-approved Git workflow.
 3. Create `work/swe-platform` from the shared `main` commit; the SWE works there while the Data/ML owner uses the strictly owned paths on `main`, and both lanes build against deterministic fakes before meeting again at I1.
 4. Preflight and benchmark Tavily and Exa through the provider-neutral interface where access exists; mark unavailable candidates `not_live_tested`, stop for the human provider decision, and add at most one approved generic runtime adapter.
-5. In parallel, add local persistence/deck intake/API/UX and sourcing corpus/thesis rules/query planning/Assessment fakes.
+5. In parallel, add local persistence/deck intake/API/UX and sourcing corpus/thesis rules/query planning/Assessment fakes; integrate Mistral OCR through the provider-neutral extractor using fictional inputs until private-deck controls are explicitly enabled.
 6. Integrate the selected provider and source-specific verification at checkpoint I2.
 7. Stop at the human framework-selection gate.
 8. After approval, add model-backed logical analyses, validation, memo synthesis, and tracing.
@@ -470,7 +480,7 @@ Each stage remains runnable with deterministic fixtures. External adapters and m
 
 ## Open Questions
 
-1. **Mandatory human decision:** Which model provider and orchestration option—plain Python, LangGraph, LangChain, LlamaIndex, or another reviewed choice—will be approved after framework-neutral foundations and comparison evidence exist?
+1. **Mandatory human decision:** Which investment-intelligence model provider and orchestration option—plain Python, LangGraph, LangChain, LlamaIndex, or another reviewed choice—will be approved after framework-neutral foundations and comparison evidence exist? The ingestion-only Mistral OCR selection does not answer this question.
 2. Which frontend technology best fits the team and hackathon deadline while satisfying the UX specification?
 3. **Mandatory human decision:** Does the representative sourcing bake-off select exactly one generic provider—Tavily, Exa, or another—or no generic provider for P0? A two-provider runtime belongs in a later change.
 4. Which direct/source-specific outbound connector should serve as or complement the live discovery path? GitHub is the leading candidate because it can verify developer activity at the source.

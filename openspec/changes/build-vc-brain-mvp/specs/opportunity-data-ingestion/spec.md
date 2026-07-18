@@ -22,6 +22,14 @@ The system SHALL accept a company name and a valid pitch deck as the only mandat
 - **WHEN** the system accepts a pitch deck
 - **THEN** it stores an immutable Source Artifact with the original filename, media type, content hash, receipt time, and page-addressable extracted representation
 
+#### Scenario: Mistral OCR extracts an approved deck
+- **WHEN** policy permits the selected Mistral OCR 4 adapter to process an accepted deck
+- **THEN** the system uses the provider-neutral extractor interface, records the input hash, concrete returned OCR model, extraction time, usage, and ordered page indexes with Markdown and available confidence, and keeps every page linked to the immutable private Source Artifact rather than treating generated text as primary Evidence
+
+#### Scenario: External OCR is unavailable or disallowed
+- **WHEN** Mistral OCR fails, the account's required data controls are not confirmed, or policy disallows external processing for the deck's classification
+- **THEN** the original deck remains privately stored, the extraction stage records a safe blocked or failed result, and decision-relevant extracted fields remain Unknown without fabricating content
+
 #### Scenario: Invalid upload is isolated
 - **WHEN** an uploaded file fails configured type, size, malware, or parse validation
 - **THEN** the system rejects or quarantines that file with a safe, actionable reason and does not begin screening from its untrusted contents
@@ -185,6 +193,8 @@ Every ingestion run SHALL expose a stable run identifier, status, source operati
 
 ### Requirement: Sensitive data and credentials remain controlled
 The system SHALL keep external-provider credentials server-side, restrict access to non-public uploaded Source Artifacts, and apply an explicit allow/deny and retention policy before sending content to a third party. Public availability alone MUST NOT remove the need to record source terms, data classification, and collection purpose.
+
+The selected Mistral OCR adapter SHALL use a bounded stateless OCR request rather than a public deck URL or stateful file/batch upload. Founder-private deck transfer SHALL default to disabled and SHALL require explicit runtime approval confirming the account's training-use setting, retention or Zero Data Retention posture, permitted region, and collection purpose. The Mistral OCR selection is limited to extraction and MUST NOT be interpreted as approval for investment-intelligence model analysis.
 
 #### Scenario: Pitch deck enrichment is requested
 - **WHEN** an ingestion step would send private deck content to an external provider not approved for that data class
