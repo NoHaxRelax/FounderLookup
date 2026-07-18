@@ -1,0 +1,288 @@
+{
+  "fixture_schema_version": "golden_candidate.v0.1.0",
+  "fixture_id": "golden_cross_signal_candidate",
+  "fictional": true,
+  "evaluation_as_of": "2026-07-01T00:00:00Z",
+  "labels": {
+    "required_cases": [
+      "cross_signal_candidate",
+      "duplicate_identity"
+    ],
+    "early_signal_categories": [
+      "developer_activity",
+      "product_launch"
+    ],
+    "top_result_relevance": "relevant"
+  },
+  "subject": {
+    "outbound_candidate_id": "candidate_fixture_003",
+    "company": {
+      "company_id": "company_fixture_cedarstack",
+      "name": "Cedar Stack (fictional)"
+    },
+    "founder_records": [
+      {
+        "record_id": "founder_record_fixture_cedar_repo",
+        "display_name": "Test Founder Cedar-31",
+        "stable_identifiers": [
+          "fixture:developer-handle:cedar31"
+        ]
+      },
+      {
+        "record_id": "founder_record_fixture_cedar_launch",
+        "display_name": "Cedar-31",
+        "stable_identifiers": [
+          "fixture:developer-handle:cedar31",
+          "fixture:launch-maker:cedar31"
+        ]
+      }
+    ]
+  },
+  "source_artifacts": [
+    {
+      "source_artifact_id": "artifact_fixture_003_repository",
+      "source_category": "developer_activity",
+      "source_type": "repository_release",
+      "publisher_key": "fixture_publisher_forge",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://forge.example.invalid/cedar31/cedar-stack/releases/v0.4.0",
+        "fragment": "release-notes"
+      },
+      "published_at": "2026-06-24T00:00:00Z",
+      "retrieved_at": "2026-06-25T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 7,
+        "label": "fresh"
+      }
+    },
+    {
+      "source_artifact_id": "artifact_fixture_003_launch",
+      "source_category": "product_launch",
+      "source_type": "launch_page",
+      "publisher_key": "fixture_publisher_launchboard",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://launchboard.example.invalid/products/cedar-stack",
+        "fragment": "maker-product-and-demo"
+      },
+      "published_at": "2026-06-26T00:00:00Z",
+      "retrieved_at": "2026-06-27T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 5,
+        "label": "fresh"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "observation_fixture_003_release",
+      "source_artifact_id": "artifact_fixture_003_repository",
+      "field": "technical_release",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Open-source policy engine release with reproducible benchmarks"
+      },
+      "observed_at": "2026-06-24T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_003_launch",
+      "source_artifact_id": "artifact_fixture_003_launch",
+      "field": "product_launch",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Hosted policy engine launched with a public enterprise-oriented demo"
+      },
+      "observed_at": "2026-06-26T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_003_verified_link",
+      "source_artifact_id": "artifact_fixture_003_launch",
+      "field": "maker_repository_link",
+      "knowledge_value": {
+        "state": "known",
+        "value": "fixture:developer-handle:cedar31"
+      },
+      "observed_at": "2026-06-26T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_fixture_003_release",
+      "source_artifact_id": "artifact_fixture_003_repository",
+      "observation_id": "observation_fixture_003_release",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://forge.example.invalid/cedar31/cedar-stack/releases/v0.4.0",
+        "fragment": "benchmark-table"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_003_launch",
+      "source_artifact_id": "artifact_fixture_003_launch",
+      "observation_id": "observation_fixture_003_launch",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://launchboard.example.invalid/products/cedar-stack",
+        "fragment": "product-demo"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_003_identity",
+      "source_artifact_id": "artifact_fixture_003_launch",
+      "observation_id": "observation_fixture_003_verified_link",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://launchboard.example.invalid/products/cedar-stack",
+        "fragment": "maker-links:repository"
+      }
+    }
+  ],
+  "expected": {
+    "pre_fundraising_trigger": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "A technical release and an independently published product launch corroborate active company building"
+      },
+      "evidence_ids": [
+        "evidence_fixture_003_release",
+        "evidence_fixture_003_launch"
+      ]
+    },
+    "reason_to_contact": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "The founder paired a reproducible infrastructure release with a recent enterprise-oriented launch"
+      },
+      "evidence_ids": [
+        "evidence_fixture_003_release",
+        "evidence_fixture_003_launch"
+      ]
+    },
+    "knowledge_values": {
+      "sector": {
+        "state": "known",
+        "value": "ai_infrastructure",
+        "evidence_ids": [
+          "evidence_fixture_003_release",
+          "evidence_fixture_003_launch"
+        ]
+      },
+      "technical_founder": {
+        "state": "known",
+        "value": true,
+        "evidence_ids": [
+          "evidence_fixture_003_release",
+          "evidence_fixture_003_identity"
+        ]
+      },
+      "enterprise_traction": {
+        "state": "unknown",
+        "reason": "Enterprise-oriented positioning and a demo do not establish customer traction",
+        "evidence_ids": []
+      },
+      "prior_vc_backing": {
+        "state": "unknown",
+        "reason": "No reliable funding record is present in the bounded corpus",
+        "evidence_ids": []
+      }
+    },
+    "thesis": {
+      "thesis_version": "thesis_fixture.v0.1.0",
+      "criteria": [
+        {
+          "criterion": "sector",
+          "mode": "hard_constraint",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_003_release",
+            "evidence_fixture_003_launch"
+          ]
+        },
+        {
+          "criterion": "technical_founder",
+          "mode": "scored_preference",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_003_release"
+          ]
+        },
+        {
+          "criterion": "enterprise_traction",
+          "mode": "scored_preference",
+          "outcome": "unknown",
+          "knowledge_state": "unknown",
+          "evidence_ids": []
+        }
+      ]
+    },
+    "coverage": {
+      "source_count": 2,
+      "independent_source_count": 2,
+      "source_categories": [
+        "developer_activity",
+        "product_launch"
+      ],
+      "public_history": "emerging",
+      "expected_band": "medium",
+      "missing_history_quality_penalty": 0,
+      "uncertainty_effect": "unchanged"
+    },
+    "identity": {
+      "rule_version": "identity_fixture.v0.1.0",
+      "outcome": "link_duplicate",
+      "canonical_founder_ids": [
+        "founder_fixture_cedar31"
+      ],
+      "source_record_ids_to_link": [
+        "founder_record_fixture_cedar_repo",
+        "founder_record_fixture_cedar_launch"
+      ],
+      "must_not_merge_record_ids": [],
+      "evidence_ids": [
+        "evidence_fixture_003_identity"
+      ],
+      "required_behavior": "Preserve both source aliases and the reversible link event"
+    },
+    "preliminary_assessment": {
+      "should_create": true,
+      "mode": "preliminary",
+      "trigger": "conviction_threshold_met",
+      "founder_score": {
+        "expected_knowledge_state": "known",
+        "expected_provisional": true,
+        "exact_numeric_score": "not_asserted",
+        "missing_history_quality_penalty": 0,
+        "required_basis_evidence_ids": [
+          "evidence_fixture_003_release",
+          "evidence_fixture_003_launch"
+        ]
+      },
+      "decision_readiness": "not_evaluated",
+      "recommendation": "activate",
+      "smallest_next_evidence_request": "One customer reference or usage artifact that establishes enterprise traction",
+      "contradiction_count": 0
+    }
+  }
+}

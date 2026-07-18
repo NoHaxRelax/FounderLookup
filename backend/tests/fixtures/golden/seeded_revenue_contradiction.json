@@ -1,0 +1,301 @@
+{
+  "fixture_schema_version": "golden_candidate.v0.1.0",
+  "fixture_id": "golden_seeded_revenue_contradiction",
+  "fictional": true,
+  "evaluation_as_of": "2026-07-01T00:00:00Z",
+  "labels": {
+    "required_cases": [
+      "seeded_contradiction"
+    ],
+    "early_signal_categories": [
+      "accelerator_cohort",
+      "product_launch"
+    ],
+    "top_result_relevance": "relevant"
+  },
+  "subject": {
+    "outbound_candidate_id": "candidate_fixture_005",
+    "company": {
+      "company_id": "company_fixture_saffronmesh",
+      "name": "Saffron Mesh (fictional)"
+    },
+    "founder_records": [
+      {
+        "record_id": "founder_record_fixture_saffron53",
+        "display_name": "Test Founder Saffron-53",
+        "stable_identifiers": [
+          "fixture:launch-maker:saffron53",
+          "fixture:accelerator-person:saffron53"
+        ]
+      }
+    ]
+  },
+  "source_artifacts": [
+    {
+      "source_artifact_id": "artifact_fixture_005_launch",
+      "source_category": "product_launch",
+      "source_type": "launch_page",
+      "publisher_key": "fixture_publisher_launchboard",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://launchboard.example.invalid/products/saffron-mesh",
+        "fragment": "maker-traction-update"
+      },
+      "published_at": "2026-06-20T00:00:00Z",
+      "retrieved_at": "2026-06-21T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 11,
+        "label": "fresh"
+      }
+    },
+    {
+      "source_artifact_id": "artifact_fixture_005_accelerator",
+      "source_category": "accelerator_cohort",
+      "source_type": "demo_day_profile",
+      "publisher_key": "fixture_publisher_orbit_foundry",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://orbit-foundry.example.invalid/demo-day/2026/saffron-mesh",
+        "fragment": "traction-facts"
+      },
+      "published_at": "2026-06-22T00:00:00Z",
+      "retrieved_at": "2026-06-23T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 9,
+        "label": "fresh"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "observation_fixture_005_arr_launch",
+      "source_artifact_id": "artifact_fixture_005_launch",
+      "field": "current_arr",
+      "knowledge_value": {
+        "state": "known",
+        "value": {
+          "amount": 1200000,
+          "currency": "USD",
+          "metric": "annual_recurring_revenue",
+          "as_of": "2026-06-15"
+        }
+      },
+      "observed_at": "2026-06-20T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_005_arr_accelerator",
+      "source_artifact_id": "artifact_fixture_005_accelerator",
+      "field": "current_arr",
+      "knowledge_value": {
+        "state": "known",
+        "value": {
+          "amount": 400000,
+          "currency": "USD",
+          "metric": "annual_recurring_revenue",
+          "as_of": "2026-06-15"
+        }
+      },
+      "observed_at": "2026-06-22T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_fixture_005_arr_launch",
+      "source_artifact_id": "artifact_fixture_005_launch",
+      "observation_id": "observation_fixture_005_arr_launch",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://launchboard.example.invalid/products/saffron-mesh",
+        "fragment": "traction:arr-1.2m-as-of-2026-06-15"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_005_arr_accelerator",
+      "source_artifact_id": "artifact_fixture_005_accelerator",
+      "observation_id": "observation_fixture_005_arr_accelerator",
+      "polarity": "refutes",
+      "locator": {
+        "uri": "https://orbit-foundry.example.invalid/demo-day/2026/saffron-mesh",
+        "fragment": "traction:arr-0.4m-as-of-2026-06-15"
+      }
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "claim_fixture_005_current_arr",
+      "subject_id": "company_fixture_saffronmesh",
+      "statement": "Saffron Mesh has USD 1.2M annual recurring revenue as of 2026-06-15",
+      "supporting_evidence_ids": [
+        "evidence_fixture_005_arr_launch"
+      ],
+      "counter_evidence_ids": [
+        "evidence_fixture_005_arr_accelerator"
+      ]
+    }
+  ],
+  "expected": {
+    "pre_fundraising_trigger": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "A recent product launch and accelerator profile expose strong but incompatible traction claims that warrant diligence"
+      },
+      "evidence_ids": [
+        "evidence_fixture_005_arr_launch",
+        "evidence_fixture_005_arr_accelerator"
+      ]
+    },
+    "reason_to_contact": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "Resolve the material recurring-revenue contradiction before relying on traction in prioritization"
+      },
+      "evidence_ids": [
+        "evidence_fixture_005_arr_launch",
+        "evidence_fixture_005_arr_accelerator"
+      ]
+    },
+    "knowledge_values": {
+      "sector": {
+        "state": "known",
+        "value": "enterprise_data_infrastructure",
+        "evidence_ids": [
+          "evidence_fixture_005_arr_launch"
+        ]
+      },
+      "current_arr": {
+        "state": "conflicted",
+        "reason": "Credible current sources report incompatible values for the same metric, currency, and effective date",
+        "alternatives": [
+          {
+            "value": {
+              "amount": 1200000,
+              "currency": "USD",
+              "metric": "annual_recurring_revenue",
+              "as_of": "2026-06-15"
+            },
+            "evidence_ids": [
+              "evidence_fixture_005_arr_launch"
+            ]
+          },
+          {
+            "value": {
+              "amount": 400000,
+              "currency": "USD",
+              "metric": "annual_recurring_revenue",
+              "as_of": "2026-06-15"
+            },
+            "evidence_ids": [
+              "evidence_fixture_005_arr_accelerator"
+            ]
+          }
+        ]
+      },
+      "prior_vc_backing": {
+        "state": "unknown",
+        "reason": "Accelerator participation does not establish prior VC backing",
+        "evidence_ids": []
+      }
+    },
+    "thesis": {
+      "thesis_version": "thesis_fixture.v0.1.0",
+      "criteria": [
+        {
+          "criterion": "sector",
+          "mode": "hard_constraint",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_005_arr_launch"
+          ]
+        },
+        {
+          "criterion": "enterprise_traction",
+          "mode": "hard_constraint",
+          "outcome": "unknown",
+          "knowledge_state": "conflicted",
+          "evidence_ids": [
+            "evidence_fixture_005_arr_launch",
+            "evidence_fixture_005_arr_accelerator"
+          ]
+        },
+        {
+          "criterion": "prior_vc_backing",
+          "mode": "scored_preference",
+          "outcome": "unknown",
+          "knowledge_state": "unknown",
+          "evidence_ids": []
+        }
+      ]
+    },
+    "coverage": {
+      "source_count": 2,
+      "independent_source_count": 2,
+      "source_categories": [
+        "accelerator_cohort",
+        "product_launch"
+      ],
+      "public_history": "emerging",
+      "expected_band": "medium",
+      "missing_history_quality_penalty": 0,
+      "uncertainty_effect": "widen_for_conflict"
+    },
+    "identity": {
+      "rule_version": "identity_fixture.v0.1.0",
+      "outcome": "create_new",
+      "canonical_founder_ids": [
+        "founder_fixture_saffron53"
+      ],
+      "must_not_merge_record_ids": [],
+      "evidence_ids": [
+        "evidence_fixture_005_arr_launch",
+        "evidence_fixture_005_arr_accelerator"
+      ]
+    },
+    "contradictions": [
+      {
+        "contradiction_id": "contradiction_fixture_005_arr",
+        "claim_ids": [
+          "claim_fixture_005_current_arr"
+        ],
+        "evidence_ids": [
+          "evidence_fixture_005_arr_launch",
+          "evidence_fixture_005_arr_accelerator"
+        ],
+        "status": "unresolved",
+        "blocking": true,
+        "expected_trust_state": "unscored",
+        "diligence_action": "Request a dated billing or revenue-ledger export for 2026-06-15 and reconcile the metric definition"
+      }
+    ],
+    "preliminary_assessment": {
+      "should_create": true,
+      "mode": "preliminary",
+      "trigger": "conviction_threshold_met",
+      "founder_score": {
+        "expected_knowledge_state": "known",
+        "expected_provisional": true,
+        "exact_numeric_score": "not_asserted",
+        "missing_history_quality_penalty": 0,
+        "required_behavior": "Do not encode the company traction contradiction as a founder-quality penalty"
+      },
+      "decision_readiness": "blocked",
+      "recommendation": "needs_information",
+      "smallest_next_evidence_request": "One dated billing or revenue-ledger export that resolves the ARR value and definition",
+      "contradiction_count": 1
+    }
+  }
+}

@@ -1,0 +1,283 @@
+{
+  "fixture_schema_version": "golden_candidate.v0.1.0",
+  "fixture_id": "golden_same_name_identity_ambiguity",
+  "fictional": true,
+  "evaluation_as_of": "2026-07-01T00:00:00Z",
+  "labels": {
+    "required_cases": [
+      "duplicate_identity",
+      "same_name_ambiguity"
+    ],
+    "early_signal_categories": [
+      "hackathon",
+      "research"
+    ],
+    "top_result_relevance": "relevant"
+  },
+  "subject": {
+    "outbound_candidate_id": "candidate_fixture_004",
+    "company": {
+      "company_id": "company_fixture_quartzrelay",
+      "name": "Quartz Relay (fictional)"
+    },
+    "founder_records": [
+      {
+        "record_id": "founder_record_fixture_rowan_hackathon",
+        "display_name": "Test Founder Rowan-42",
+        "stable_identifiers": [
+          "fixture:event-participant:rowan42-a"
+        ]
+      },
+      {
+        "record_id": "founder_record_fixture_rowan_research",
+        "display_name": "Test Founder Rowan-42",
+        "stable_identifiers": [
+          "fixture:researcher-id:rowan42-b"
+        ]
+      }
+    ]
+  },
+  "source_artifacts": [
+    {
+      "source_artifact_id": "artifact_fixture_004_hackathon",
+      "source_category": "hackathon",
+      "source_type": "event_project_page",
+      "publisher_key": "fixture_publisher_river_build",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://river-build.example.invalid/projects/quartz-relay",
+        "fragment": "team-rowan42"
+      },
+      "published_at": "2026-06-18T00:00:00Z",
+      "retrieved_at": "2026-06-19T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 13,
+        "label": "fresh"
+      }
+    },
+    {
+      "source_artifact_id": "artifact_fixture_004_research",
+      "source_category": "research",
+      "source_type": "paper_metadata",
+      "publisher_key": "fixture_publisher_open_papers",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://open-papers.example.invalid/papers/fixture-8842",
+        "fragment": "author-rowan42"
+      },
+      "published_at": "2026-05-10T00:00:00Z",
+      "retrieved_at": "2026-06-19T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 52,
+        "label": "recent"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "observation_fixture_004_hackathon_identity",
+      "source_artifact_id": "artifact_fixture_004_hackathon",
+      "field": "founder_display_name",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Test Founder Rowan-42"
+      },
+      "observed_at": "2026-06-18T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_004_research_identity",
+      "source_artifact_id": "artifact_fixture_004_research",
+      "field": "author_display_name",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Test Founder Rowan-42"
+      },
+      "observed_at": "2026-05-10T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_004_project",
+      "source_artifact_id": "artifact_fixture_004_hackathon",
+      "field": "work_product",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Low-latency industrial sensor relay prototype"
+      },
+      "observed_at": "2026-06-18T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_fixture_004_hackathon_identity",
+      "source_artifact_id": "artifact_fixture_004_hackathon",
+      "observation_id": "observation_fixture_004_hackathon_identity",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://river-build.example.invalid/projects/quartz-relay",
+        "fragment": "team-rowan42"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_004_research_identity",
+      "source_artifact_id": "artifact_fixture_004_research",
+      "observation_id": "observation_fixture_004_research_identity",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://open-papers.example.invalid/papers/fixture-8842",
+        "fragment": "author-rowan42"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_004_project",
+      "source_artifact_id": "artifact_fixture_004_hackathon",
+      "observation_id": "observation_fixture_004_project",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://river-build.example.invalid/projects/quartz-relay",
+        "fragment": "demo:industrial-relay"
+      }
+    }
+  ],
+  "expected": {
+    "pre_fundraising_trigger": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "A recent hackathon prototype is thesis-relevant, while a same-name research record requires identity review before attribution"
+      },
+      "evidence_ids": [
+        "evidence_fixture_004_project"
+      ]
+    },
+    "reason_to_contact": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "Ask the Quartz Relay team about the demonstrated industrial prototype after resolving the founder identity"
+      },
+      "evidence_ids": [
+        "evidence_fixture_004_project"
+      ]
+    },
+    "knowledge_values": {
+      "sector": {
+        "state": "known",
+        "value": "industrial_infrastructure",
+        "evidence_ids": [
+          "evidence_fixture_004_project"
+        ]
+      },
+      "founder_identity": {
+        "state": "unknown",
+        "reason": "The equal display names have different stable identifiers and no corroborating link",
+        "evidence_ids": [
+          "evidence_fixture_004_hackathon_identity",
+          "evidence_fixture_004_research_identity"
+        ]
+      },
+      "research_history_for_candidate_founder": {
+        "state": "unknown",
+        "reason": "The research author cannot safely be attributed to the hackathon participant",
+        "evidence_ids": [
+          "evidence_fixture_004_research_identity"
+        ]
+      },
+      "prior_vc_backing": {
+        "state": "unknown",
+        "reason": "No reliable financing record is included",
+        "evidence_ids": []
+      }
+    },
+    "thesis": {
+      "thesis_version": "thesis_fixture.v0.1.0",
+      "criteria": [
+        {
+          "criterion": "sector",
+          "mode": "scored_preference",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_004_project"
+          ]
+        },
+        {
+          "criterion": "technical_founder",
+          "mode": "hard_constraint",
+          "outcome": "unknown",
+          "knowledge_state": "unknown",
+          "evidence_ids": []
+        },
+        {
+          "criterion": "research_history",
+          "mode": "scored_preference",
+          "outcome": "unknown",
+          "knowledge_state": "unknown",
+          "evidence_ids": [
+            "evidence_fixture_004_research_identity"
+          ]
+        }
+      ]
+    },
+    "coverage": {
+      "source_count": 2,
+      "independent_source_count": 2,
+      "source_categories": [
+        "hackathon",
+        "research"
+      ],
+      "public_history": "ambiguous",
+      "expected_band": "low",
+      "missing_history_quality_penalty": 0,
+      "uncertainty_effect": "widen"
+    },
+    "identity": {
+      "rule_version": "identity_fixture.v0.1.0",
+      "outcome": "human_review",
+      "canonical_founder_ids": [
+        "founder_fixture_rowan42_a",
+        "founder_fixture_rowan42_b"
+      ],
+      "must_not_merge_record_ids": [
+        "founder_record_fixture_rowan_hackathon",
+        "founder_record_fixture_rowan_research"
+      ],
+      "evidence_ids": [
+        "evidence_fixture_004_hackathon_identity",
+        "evidence_fixture_004_research_identity"
+      ],
+      "required_behavior": "Keep both identities separate and create an identity-review item; equal names are insufficient merge evidence"
+    },
+    "preliminary_assessment": {
+      "should_create": true,
+      "mode": "preliminary",
+      "trigger": "human_requested",
+      "founder_score": {
+        "expected_knowledge_state": "unknown",
+        "expected_reason": "founder_identity_unresolved",
+        "expected_provisional": true,
+        "exact_numeric_score": "not_asserted",
+        "missing_history_quality_penalty": 0
+      },
+      "decision_readiness": "blocked",
+      "recommendation": "manual_review",
+      "smallest_next_evidence_request": "One stable founder identifier from the Quartz Relay team or event organizer",
+      "contradiction_count": 0
+    }
+  }
+}

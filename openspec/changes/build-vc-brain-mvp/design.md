@@ -188,6 +188,8 @@ Before adding a provider SDK to the runtime project, the Data/ML workstream pref
 
 Tavily currently exposes Search, Extract, Crawl, and Map capabilities. Exa currently exposes Search with content/highlight options, domain/date filters, categories including people, company, and research papers, and structured outputs. These capabilities are inputs to a benchmark, not a selection. A human reviewer records exactly one generic provider—Tavily, Exa, or another—or no generic provider as the P0 choice. Only then is the selected generic adapter and SDK added. Running two generic providers is deferred to a separate follow-up change.
 
+Tavily is the current working front-runner, but this is not the human approval required by the gate and no Tavily dependency is added during the shared-contract freeze. OSINT-style multi-source discovery and correlation is a possible stretch direction only; it remains outside P0 until its sources, permitted techniques, privacy/terms constraints, evidence rules, and review boundary are explicitly proposed and approved.
+
 Choosing no generic provider does not invalidate the P0 slice: the human-approved source-specific adapter becomes the bounded live discovery path as well as the authoritative verifier. If no candidate live adapter is accessible at all, the gate is blocked and the change must be revised explicitly rather than pretending a fake run is live.
 
 Regardless of provider:
@@ -417,12 +419,12 @@ This MVP remains one OpenSpec change because both developers are implementing on
 **Synchronization protocol:**
 
 1. The SWE lands the scaffold first; both developers immediately pair on the smallest v0 contract PR.
-2. After the planning artifacts, scaffold, v0 contracts, fixtures, and contract tests are committed through the team's normal user-approved Git workflow, create `work/swe-platform` and `work/data-intelligence` branches or worktrees from that exact shared commit. If separate worktrees are impractical, retain one worktree and enforce the same file-ownership boundary.
+2. After the planning artifacts, scaffold, v0 contracts, fixtures, and contract tests are committed to `main` through the team's normal user-approved Git workflow, create `work/swe-platform` from that exact shared commit. For the initial two-developer sprint, `main` is both the Data/ML lane and shared integration branch; strict file ownership and paired review protect shared contracts. A separate Data/ML feature branch may replace this temporary arrangement in a later workflow change.
 3. Each PR cites OpenSpec requirement/scenario names and task IDs, includes interface-level tests, and stays small enough to merge at least daily.
 4. Shared-contract behavior changes update this OpenSpec change first, receive both reviewers' approval, increment the schema/policy version, and land before dependent lane changes.
 5. SWE develops API/UX against deterministic fakes; Data/ML makes live adapters satisfy the same contract suite. Neither lane imports the other's implementation internals.
-6. Rebase both lanes after each shared-contract merge and run the combined contract suite before merging to `main`.
-7. Designate one integrator to check off `tasks.md` only after the corresponding PR lands on `main`; feature branches reference task and scenario IDs but do not compete to edit checkbox state.
+6. Rebase `work/swe-platform` after each shared-contract change on `main` and run the combined contract suite before merging SWE work back to `main`.
+7. The SWE owner is the initial integrator and checks off `tasks.md` only after the corresponding work is present and verified on `main`; lane commits reference task and scenario IDs but do not compete to edit checkbox state.
 
 **Joint integration checkpoints:**
 
@@ -456,7 +458,7 @@ This is a greenfield change, so migration means staged construction rather than 
 
 1. Scaffold the backend and verify an empty FastAPI service through `uv`.
 2. Review and commit the OpenSpec artifacts, schema shapes/version identifiers, deterministic fixtures, and shared contract tests through the team's normal user-approved Git workflow.
-3. Split into the SWE/platform and Data/ML workstreams from that shared commit; both lanes build against deterministic fakes and meet again at the I1 fake vertical slice.
+3. Create `work/swe-platform` from the shared `main` commit; the SWE works there while the Data/ML owner uses the strictly owned paths on `main`, and both lanes build against deterministic fakes before meeting again at I1.
 4. Preflight and benchmark Tavily and Exa through the provider-neutral interface where access exists; mark unavailable candidates `not_live_tested`, stop for the human provider decision, and add at most one approved generic runtime adapter.
 5. In parallel, add local persistence/deck intake/API/UX and sourcing corpus/thesis rules/query planning/Assessment fakes.
 6. Integrate the selected provider and source-specific verification at checkpoint I2.
@@ -482,7 +484,7 @@ The following work is deliberately outside `build-vc-brain-mvp`. It must be prop
 
 - production schema migrations, richer retention/deletion workflows, malware-service integration, and comprehensive private-file audit history;
 - cursor-stable collection snapshots, standalone CRUD/relationship routes for every domain record, Decision correction/supersession, exhaustive error/rate-limit cases, and broader security testing;
-- production scheduling and operational monitoring, broader recurring-source coverage, deeper crawl/map features, expanded source categories, or a second generic provider;
+- production scheduling and operational monitoring, broader recurring-source coverage, deeper crawl/map features, expanded source categories, a second generic provider, or policy-reviewed OSINT-style multi-source correlation;
 - score and Trust calibration on a larger labeled corpus and numerical intervals only when statistically defensible;
 - exhaustive cross-browser and assistive-technology certification beyond the P0 keyboard, contrast, reflow, forced-colors, reduced-motion, and semantic-state acceptance checks;
 - production multi-tenancy, portfolio workflows, or learned investment weights.

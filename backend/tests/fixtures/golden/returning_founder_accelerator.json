@@ -1,0 +1,288 @@
+{
+  "fixture_schema_version": "golden_candidate.v0.1.0",
+  "fixture_id": "golden_returning_founder_accelerator",
+  "fictional": true,
+  "evaluation_as_of": "2026-07-01T00:00:00Z",
+  "labels": {
+    "required_cases": [
+      "returning_founder"
+    ],
+    "early_signal_categories": [
+      "accelerator_cohort"
+    ],
+    "top_result_relevance": "relevant"
+  },
+  "subject": {
+    "outbound_candidate_id": "candidate_fixture_002",
+    "company": {
+      "company_id": "company_fixture_latticeharbor",
+      "name": "Lattice Harbor (fictional)"
+    },
+    "founder_records": [
+      {
+        "record_id": "founder_record_fixture_birch29_new",
+        "display_name": "Test Founder Birch-29",
+        "stable_identifiers": [
+          "fixture:accelerator-person:birch29",
+          "fixture:researcher-id:birch29"
+        ]
+      }
+    ]
+  },
+  "source_artifacts": [
+    {
+      "source_artifact_id": "artifact_fixture_002_cohort",
+      "source_category": "accelerator_cohort",
+      "source_type": "cohort_company_page",
+      "publisher_key": "fixture_publisher_northstar_lab",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://northstar-lab.example.invalid/cohorts/2026/lattice-harbor",
+        "fragment": "company-and-founders"
+      },
+      "published_at": "2026-06-01T00:00:00Z",
+      "retrieved_at": "2026-06-02T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 30,
+        "label": "fresh"
+      }
+    },
+    {
+      "source_artifact_id": "artifact_fixture_002_prior_company",
+      "source_category": "public_company_update",
+      "source_type": "archived_company_team_page",
+      "publisher_key": "fixture_publisher_prior_company",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://prior-co.example.invalid/archive/team",
+        "fragment": "founder-birch29"
+      },
+      "published_at": "2022-04-15T00:00:00Z",
+      "retrieved_at": "2026-06-02T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 1538,
+        "label": "historical"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "observation_fixture_002_cohort",
+      "source_artifact_id": "artifact_fixture_002_cohort",
+      "field": "accelerator_membership",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Northstar Lab 2026 fictional cohort"
+      },
+      "observed_at": "2026-06-01T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_002_prior_role",
+      "source_artifact_id": "artifact_fixture_002_prior_company",
+      "field": "prior_founder_role",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Founder of Prior Co (fictional)"
+      },
+      "observed_at": "2022-04-15T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_002_geography",
+      "source_artifact_id": "artifact_fixture_002_cohort",
+      "field": "company_geography",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Toronto"
+      },
+      "observed_at": "2026-06-01T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_fixture_002_cohort",
+      "source_artifact_id": "artifact_fixture_002_cohort",
+      "observation_id": "observation_fixture_002_cohort",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://northstar-lab.example.invalid/cohorts/2026/lattice-harbor",
+        "fragment": "cohort-badge-and-description"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_002_prior_role",
+      "source_artifact_id": "artifact_fixture_002_prior_company",
+      "observation_id": "observation_fixture_002_prior_role",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://prior-co.example.invalid/archive/team",
+        "fragment": "founder-birch29"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_002_geography",
+      "source_artifact_id": "artifact_fixture_002_cohort",
+      "observation_id": "observation_fixture_002_geography",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://northstar-lab.example.invalid/cohorts/2026/lattice-harbor",
+        "fragment": "company-location:toronto"
+      }
+    }
+  ],
+  "expected": {
+    "pre_fundraising_trigger": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "A returning founder entered a current accelerator cohort with a new company"
+      },
+      "evidence_ids": [
+        "evidence_fixture_002_cohort",
+        "evidence_fixture_002_prior_role"
+      ]
+    },
+    "reason_to_contact": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "A previously known founder is building a thesis-relevant new company in a current cohort"
+      },
+      "evidence_ids": [
+        "evidence_fixture_002_cohort",
+        "evidence_fixture_002_prior_role"
+      ]
+    },
+    "knowledge_values": {
+      "sector": {
+        "state": "known",
+        "value": "ai_infrastructure",
+        "evidence_ids": [
+          "evidence_fixture_002_cohort"
+        ]
+      },
+      "accelerator_history": {
+        "state": "known",
+        "value": "Northstar Lab 2026 fictional cohort",
+        "evidence_ids": [
+          "evidence_fixture_002_cohort"
+        ]
+      },
+      "prior_founder_history": {
+        "state": "known",
+        "value": "Founder of Prior Co (fictional)",
+        "evidence_ids": [
+          "evidence_fixture_002_prior_role"
+        ]
+      },
+      "geography": {
+        "state": "known",
+        "value": "Toronto",
+        "evidence_ids": [
+          "evidence_fixture_002_geography"
+        ]
+      },
+      "prior_vc_backing_for_current_company": {
+        "state": "unknown",
+        "reason": "Cohort membership does not establish the current company's financing history",
+        "evidence_ids": []
+      }
+    },
+    "thesis": {
+      "thesis_version": "thesis_fixture.v0.1.0",
+      "criteria": [
+        {
+          "criterion": "sector",
+          "mode": "hard_constraint",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_002_cohort"
+          ]
+        },
+        {
+          "criterion": "accelerator_history",
+          "mode": "scored_preference",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_002_cohort"
+          ]
+        },
+        {
+          "criterion": "geography",
+          "mode": "scored_preference",
+          "outcome": "mismatch",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_002_geography"
+          ]
+        },
+        {
+          "criterion": "prior_vc_backing_for_current_company",
+          "mode": "scored_preference",
+          "outcome": "unknown",
+          "knowledge_state": "unknown",
+          "evidence_ids": []
+        }
+      ]
+    },
+    "coverage": {
+      "source_count": 2,
+      "independent_source_count": 2,
+      "source_categories": [
+        "accelerator_cohort",
+        "public_company_update"
+      ],
+      "public_history": "established",
+      "expected_band": "medium",
+      "missing_history_quality_penalty": 0,
+      "uncertainty_effect": "unchanged"
+    },
+    "identity": {
+      "rule_version": "identity_fixture.v0.1.0",
+      "outcome": "link_existing",
+      "canonical_founder_ids": [
+        "founder_fixture_birch29"
+      ],
+      "must_not_merge_record_ids": [],
+      "evidence_ids": [
+        "evidence_fixture_002_cohort",
+        "evidence_fixture_002_prior_role"
+      ],
+      "expected_history_behavior": "Reference the existing founder and preserve the prior company as a separate company and opportunity history"
+    },
+    "preliminary_assessment": {
+      "should_create": true,
+      "mode": "preliminary",
+      "trigger": "conviction_threshold_met",
+      "founder_score": {
+        "expected_knowledge_state": "known",
+        "expected_provisional": false,
+        "exact_numeric_score": "not_asserted",
+        "missing_history_quality_penalty": 0,
+        "required_behavior": "Reference the latest eligible existing founder-score snapshot without overwriting history"
+      },
+      "decision_readiness": "not_evaluated",
+      "recommendation": "activate",
+      "smallest_next_evidence_request": "One current product or customer artifact for Lattice Harbor",
+      "contradiction_count": 0
+    }
+  }
+}

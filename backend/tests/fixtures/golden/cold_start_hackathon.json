@@ -1,0 +1,220 @@
+{
+  "fixture_schema_version": "golden_candidate.v0.1.0",
+  "fixture_id": "golden_cold_start_hackathon",
+  "fictional": true,
+  "evaluation_as_of": "2026-07-01T00:00:00Z",
+  "labels": {
+    "required_cases": [
+      "cold_start_founder"
+    ],
+    "early_signal_categories": [
+      "hackathon"
+    ],
+    "top_result_relevance": "relevant"
+  },
+  "subject": {
+    "outbound_candidate_id": "candidate_fixture_001",
+    "company": {
+      "company_id": "company_fixture_mossline",
+      "name": "Mossline Systems (fictional)"
+    },
+    "founder_records": [
+      {
+        "record_id": "founder_record_fixture_aster17",
+        "display_name": "Test Founder Aster-17",
+        "stable_identifiers": [
+          "fixture:event-participant:aster17"
+        ]
+      }
+    ]
+  },
+  "source_artifacts": [
+    {
+      "source_artifact_id": "artifact_fixture_001_hackathon",
+      "source_category": "hackathon",
+      "source_type": "event_project_page",
+      "publisher_key": "fixture_publisher_alpine_build_day",
+      "data_classification": "public_fixture",
+      "origin": "fixture_import",
+      "locator": {
+        "uri": "https://alpine-build-day.example.invalid/2026/projects/mossline",
+        "fragment": "project-demo-and-team"
+      },
+      "published_at": "2026-06-20T00:00:00Z",
+      "retrieved_at": "2026-06-21T00:00:00Z",
+      "freshness": {
+        "evaluated_at": "2026-07-01T00:00:00Z",
+        "age_days": 11,
+        "label": "fresh"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "observation_fixture_001_prototype",
+      "source_artifact_id": "artifact_fixture_001_hackathon",
+      "field": "work_product",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Working event-driven emissions-audit prototype demonstrated on a synthetic factory stream"
+      },
+      "observed_at": "2026-06-20T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    },
+    {
+      "observation_id": "observation_fixture_001_prize",
+      "source_artifact_id": "artifact_fixture_001_hackathon",
+      "field": "event_result",
+      "knowledge_value": {
+        "state": "known",
+        "value": "Technical implementation prize"
+      },
+      "observed_at": "2026-06-20T00:00:00Z",
+      "extraction": {
+        "method": "fixture_import",
+        "version": "fixture_extractor.v0.1.0",
+        "verification_state": "source_observed"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_fixture_001_prototype",
+      "source_artifact_id": "artifact_fixture_001_hackathon",
+      "observation_id": "observation_fixture_001_prototype",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://alpine-build-day.example.invalid/2026/projects/mossline",
+        "fragment": "demo-video:00:01:12-00:02:08"
+      }
+    },
+    {
+      "evidence_id": "evidence_fixture_001_prize",
+      "source_artifact_id": "artifact_fixture_001_hackathon",
+      "observation_id": "observation_fixture_001_prize",
+      "polarity": "supports",
+      "locator": {
+        "uri": "https://alpine-build-day.example.invalid/2026/projects/mossline",
+        "fragment": "awards:technical-implementation"
+      }
+    }
+  ],
+  "expected": {
+    "pre_fundraising_trigger": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "A working technical prototype won an implementation prize before any reliable fundraising record was established"
+      },
+      "evidence_ids": [
+        "evidence_fixture_001_prototype",
+        "evidence_fixture_001_prize"
+      ]
+    },
+    "reason_to_contact": {
+      "knowledge_value": {
+        "state": "known",
+        "value": "Review the demonstrated prototype and ask for one design-partner validation artifact"
+      },
+      "evidence_ids": [
+        "evidence_fixture_001_prototype"
+      ]
+    },
+    "knowledge_values": {
+      "sector": {
+        "state": "known",
+        "value": "enterprise_climate_software",
+        "evidence_ids": [
+          "evidence_fixture_001_prototype"
+        ]
+      },
+      "prior_vc_backing": {
+        "state": "unknown",
+        "reason": "No reliable funding record is present in the bounded fixture corpus; source silence is not proof of no backing",
+        "evidence_ids": []
+      },
+      "enterprise_traction": {
+        "state": "unknown",
+        "reason": "The prototype demonstration does not establish a customer or design partner",
+        "evidence_ids": []
+      },
+      "public_founder_history": {
+        "state": "unknown",
+        "reason": "No earlier public founder record is included",
+        "evidence_ids": []
+      }
+    },
+    "thesis": {
+      "thesis_version": "thesis_fixture.v0.1.0",
+      "criteria": [
+        {
+          "criterion": "sector",
+          "mode": "scored_preference",
+          "outcome": "match",
+          "knowledge_state": "known",
+          "evidence_ids": [
+            "evidence_fixture_001_prototype"
+          ]
+        },
+        {
+          "criterion": "enterprise_traction",
+          "mode": "scored_preference",
+          "outcome": "unknown",
+          "knowledge_state": "unknown",
+          "evidence_ids": []
+        },
+        {
+          "criterion": "geography",
+          "mode": "no_preference",
+          "outcome": "not_evaluated",
+          "knowledge_state": "unknown",
+          "evidence_ids": []
+        }
+      ]
+    },
+    "coverage": {
+      "source_count": 1,
+      "independent_source_count": 1,
+      "source_categories": [
+        "hackathon"
+      ],
+      "public_history": "sparse",
+      "expected_band": "low",
+      "missing_history_quality_penalty": 0,
+      "uncertainty_effect": "widen"
+    },
+    "identity": {
+      "rule_version": "identity_fixture.v0.1.0",
+      "outcome": "create_new",
+      "canonical_founder_ids": [
+        "founder_fixture_aster17"
+      ],
+      "must_not_merge_record_ids": [],
+      "evidence_ids": [
+        "evidence_fixture_001_prototype"
+      ]
+    },
+    "preliminary_assessment": {
+      "should_create": true,
+      "mode": "preliminary",
+      "trigger": "human_requested",
+      "founder_score": {
+        "expected_knowledge_state": "known",
+        "expected_provisional": true,
+        "exact_numeric_score": "not_asserted",
+        "missing_history_quality_penalty": 0,
+        "required_basis_evidence_ids": [
+          "evidence_fixture_001_prototype",
+          "evidence_fixture_001_prize"
+        ]
+      },
+      "decision_readiness": "not_evaluated",
+      "recommendation": "activate",
+      "smallest_next_evidence_request": "One design-partner letter or interview answer establishing whether a real buyer validated the prototype",
+      "contradiction_count": 0
+    }
+  }
+}

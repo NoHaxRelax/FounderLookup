@@ -1,0 +1,97 @@
+{
+  "fixture_schema_version": "golden_candidate_manifest.v0.1.0",
+  "corpus_id": "vc_brain_p0_golden_candidates",
+  "fictional": true,
+  "evaluation_as_of": "2026-07-01T00:00:00Z",
+  "candidate_count": 5,
+  "contract_assertions": {
+    "minimum_candidate_count": 5,
+    "minimum_early_signal_category_count": 3,
+    "all_sources_provider_neutral": true,
+    "all_subjects_and_sources_fictional": true,
+    "missing_history_quality_penalty": 0,
+    "exact_numeric_scores_asserted": false,
+    "required_cases": [
+      "cold_start_founder",
+      "cross_signal_candidate",
+      "duplicate_identity",
+      "returning_founder",
+      "same_name_ambiguity",
+      "seeded_contradiction"
+    ]
+  },
+  "early_signal_categories": [
+    "accelerator_cohort",
+    "developer_activity",
+    "hackathon",
+    "product_launch",
+    "public_company_update",
+    "research"
+  ],
+  "required_case_coverage": {
+    "cold_start_founder": [
+      "cold_start_hackathon.json"
+    ],
+    "returning_founder": [
+      "returning_founder_accelerator.json"
+    ],
+    "cross_signal_candidate": [
+      "cross_signal_candidate.json"
+    ],
+    "duplicate_identity": [
+      "cross_signal_candidate.json",
+      "same_name_identity_ambiguity.json"
+    ],
+    "same_name_ambiguity": [
+      "same_name_identity_ambiguity.json"
+    ],
+    "seeded_contradiction": [
+      "seeded_revenue_contradiction.json"
+    ]
+  },
+  "fixtures": [
+    {
+      "file": "cold_start_hackathon.json",
+      "fixture_id": "golden_cold_start_hackathon",
+      "candidate_id": "candidate_fixture_001",
+      "early_signal_categories": [
+        "hackathon"
+      ]
+    },
+    {
+      "file": "returning_founder_accelerator.json",
+      "fixture_id": "golden_returning_founder_accelerator",
+      "candidate_id": "candidate_fixture_002",
+      "early_signal_categories": [
+        "accelerator_cohort"
+      ]
+    },
+    {
+      "file": "cross_signal_candidate.json",
+      "fixture_id": "golden_cross_signal_candidate",
+      "candidate_id": "candidate_fixture_003",
+      "early_signal_categories": [
+        "developer_activity",
+        "product_launch"
+      ]
+    },
+    {
+      "file": "same_name_identity_ambiguity.json",
+      "fixture_id": "golden_same_name_identity_ambiguity",
+      "candidate_id": "candidate_fixture_004",
+      "early_signal_categories": [
+        "hackathon",
+        "research"
+      ]
+    },
+    {
+      "file": "seeded_revenue_contradiction.json",
+      "fixture_id": "golden_seeded_revenue_contradiction",
+      "candidate_id": "candidate_fixture_005",
+      "early_signal_categories": [
+        "accelerator_cohort",
+        "product_launch"
+      ]
+    }
+  ]
+}
