@@ -525,9 +525,9 @@ Each stage remains runnable with deterministic fixtures. External adapters and m
 
 ## Open Questions
 
-1. **Mandatory human decision:** Which investment-intelligence model provider and orchestration option—plain Python, LangGraph, LangChain, LlamaIndex, or another reviewed choice—will be approved after framework-neutral foundations and comparison evidence exist? The ingestion-only Mistral OCR selection does not answer this question.
+1. **Orchestration resolved (no bake-off); investment-intelligence model provider still to pin:** Orchestration for P0 is plain Python with a single model-provider SDK; no LangGraph, LangChain, or LlamaIndex is adopted, and the orchestration seam is preserved so a framework can be added later if a concrete need appears. The specific investment-intelligence model provider is pinned when credentials are set and does not change the framework-neutral contracts; the ingestion-only Mistral OCR selection does not answer this.
 2. Which frontend technology best fits the team and hackathon deadline while satisfying the UX specification?
-3. **Mandatory human decision:** Does the representative sourcing bake-off select exactly one generic provider—Tavily, Exa, or another—or no generic provider for P0? A two-provider runtime belongs in a later change.
+3. **Resolved:** No generic web-discovery provider (Tavily or Exa) is adopted for P0. Sourcing anchors on free source-specific adapters behind the provider-neutral seam, which is built for later expansion to a generic provider without changing domain contracts. A two-provider runtime belongs in a later change.
 4. Which direct/source-specific outbound connector should serve as or complement the live discovery path? GitHub is the leading candidate because it can verify developer activity at the source.
 5. What numeric rubric and calibration set should define Founder Score and Claim Trust Score factors without presenting false precision?
 6. Which source domains, provider budget, refresh cadence, and retention policy are approved for the demonstration?
