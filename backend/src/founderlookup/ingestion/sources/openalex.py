@@ -1,10 +1,10 @@
-"""GitHub developer-activity source adapter.
+"""OpenAlex scholarly source adapter.
 
 Implements the provider-neutral ``DiscoveryPort`` and ``AcquisitionPort`` against
-the public GitHub REST API. GitHub is a free, authoritative source-specific API
-and anchors the free-first sourcing decision; its results are recorded as
-``DEVELOPER_ACTIVITY`` Evidence rather than as generic web snippets. A GitHub
-search score is retrieval relevance, never founder or trust signal.
+the free OpenAlex API. OpenAlex is a free, keyless, authoritative index of
+scholarly authors and works, recorded as ``RESEARCH`` Evidence. Its
+``relevance_score`` is retrieval relevance, never founder or trust signal. An
+optional ``mailto`` joins OpenAlex's polite pool; it is not authentication.
 """
 
 from __future__ import annotations
@@ -36,36 +36,39 @@ from founderlookup.ingestion.sources._support import (
 )
 from founderlookup.ingestion.sources.http import HttpTransport, HttpTransportError
 
-_API_ROOT = "https://api.github.com"
-_HTML_ROOT = "https://github.com"
-_ADAPTER_ID = "github-developer-activity-v0"
+_API_ROOT = "https://api.openalex.org"
+_ADAPTER_ID = "openalex-research-v0"
 _JSON_MEDIA_TYPE = "application/json"
-_MAX_DISCOVERY_BYTES = 1_000_000
-_LOGIN_MAX = 39
+_MAX_DISCOVERY_BYTES = 2_000_000
+_MAX_PER_PAGE = 200
 
 
-def _login_from_url(url: str) -> str | None:
+def _short_id(entity_url: str) -> str:
+    return entity_url.rstrip("/").rsplit("/", 1)[-1] or entity_url
+
+
+def _author_id_from_url(url: str) -> str | None:
     parsed = urllib.parse.urlparse(url)
-    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+    if parsed.netloc.lower() not in {"openalex.org", "www.openalex.org", "api.openalex.org"}:
         return None
     parts = [segment for segment in parsed.path.split("/") if segment]
     if not parts:
         return None
-    login = parts[0]
-    if len(login) > _LOGIN_MAX or not all(c.isalnum() or c == "-" for c in login):
+    candidate = parts[-1]
+    if not candidate.startswith("A") or not candidate[1:].isdigit():
         return None
-    return login
+    return candidate
 
 
-class GitHubDeveloperActivitySource:
-    """Discover and acquire GitHub developer-activity Evidence.
+class OpenAlexResearchSource:
+    """Discover and acquire OpenAlex scholarly-author Evidence.
 
     Conforms to ``DiscoveryPort`` and ``AcquisitionPort``. A ``DiscoveryRequest``
     is served only for retrieval requests whose source categories include
-    ``DEVELOPER_ACTIVITY``; other categories are left to their own adapters.
+    ``RESEARCH``; other categories are left to their own adapters.
     """
 
-    source_category = SourceCategory.DEVELOPER_ACTIVITY
+    source_category = SourceCategory.RESEARCH
     adapter_id = _ADAPTER_ID
 
     def __init__(
@@ -73,20 +76,19 @@ class GitHubDeveloperActivitySource:
         transport: HttpTransport,
         *,
         now: Callable[[], datetime],
-        token: str | None = None,
+        mailto: str | None = None,
     ) -> None:
         self._transport = transport
         self._now = now
-        self._token = token
+        self._mailto = mailto
 
     def _headers(self) -> dict[str, str]:
-        headers = {
-            "accept": "application/vnd.github+json",
-            "x-github-api-version": "2022-11-28",
-        }
-        if self._token:
-            headers["authorization"] = f"Bearer {self._token}"
-        return headers
+        return {"accept": "application/json"}
+
+    def _mailto_suffix(self, separator: str) -> str:
+        if not self._mailto:
+            return ""
+        return f"{separator}mailto={urllib.parse.quote(self._mailto, safe='')}"
 
     async def discover(self, request: DiscoveryRequest) -> DiscoveryResult:
         started = time.monotonic()
@@ -99,9 +101,12 @@ class GitHubDeveloperActivitySource:
             if self.source_category not in retrieval.source_categories:
                 continue
             request_count += 1
-            per_page = min(retrieval.max_results, 100)
+            per_page = min(retrieval.max_results, _MAX_PER_PAGE)
             query = urllib.parse.quote(retrieval.query, safe="")
-            url = f"{_API_ROOT}/search/users?q={query}&per_page={per_page}"
+            url = (
+                f"{_API_ROOT}/authors?search={query}&per-page={per_page}"
+                f"{self._mailto_suffix('&')}"
+            )
             operation_id = f"{_ADAPTER_ID}:discover:{retrieval.retrieval_request_id}"
             try:
                 response = await self._transport.get(
@@ -115,7 +120,7 @@ class GitHubDeveloperActivitySource:
                     CollectionFailure(
                         operation_id=operation_id,
                         safe_code="transport_error",
-                        safe_message="developer-source discovery request failed",
+                        safe_message="scholarly-source discovery request failed",
                         retryable=True,
                     )
                 )
@@ -126,35 +131,31 @@ class GitHubDeveloperActivitySource:
                 failures.append(failure)
                 continue
 
-            items = decode_json(response.body).get("items")
-            if not isinstance(items, list):
+            results = decode_json(response.body).get("results")
+            if not isinstance(results, list):
                 continue
-            for raw in items[: retrieval.max_results]:
+            for raw in results[: retrieval.max_results]:
                 if not isinstance(raw, dict):
                     continue
-                login = raw.get("login")
-                if not isinstance(login, str) or not login:
+                entity_id = raw.get("id")
+                if not isinstance(entity_id, str) or not entity_id:
                     continue
                 rank += 1
-                html_url = raw.get("html_url")
-                original_url = (
-                    html_url
-                    if isinstance(html_url, str) and html_url
-                    else f"{_HTML_ROOT}/{login}"
-                )
+                display = raw.get("display_name")
+                title = display if isinstance(display, str) and display else entity_id
                 leads.append(
                     DiscoveryLead(
-                        lead_id=f"github-user-{slug(login)}",
+                        lead_id=f"openalex-author-{slug(_short_id(entity_id))}",
                         retrieval_request_id=retrieval.retrieval_request_id,
-                        original_url=original_url,
+                        original_url=entity_id,
                         source_category=self.source_category,
                         discovered_at=self._now(),
                         rank=rank,
-                        title=KnowledgeValue[str].known(login),
+                        title=KnowledgeValue[str].known(title),
                         provider_summary=KnowledgeValue[str].unknown(
-                            "A GitHub search result is a lead, not primary evidence"
+                            "An OpenAlex search result is a lead, not primary evidence"
                         ),
-                        retrieval_relevance=relevance(raw.get("score")),
+                        retrieval_relevance=relevance(raw.get("relevance_score")),
                     )
                 )
 
@@ -179,18 +180,18 @@ class GitHubDeveloperActivitySource:
 
     async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:
         operation_id = f"{_ADAPTER_ID}:acquire:{request.acquisition_request_id}"
-        login = _login_from_url(request.original_url)
-        if login is None:
+        author_id = _author_id_from_url(request.original_url)
+        if author_id is None:
             return self._acquisition_failure(
                 request,
                 AcquisitionStatus.FAILED,
                 operation_id,
                 "unsupported_url",
-                "URL is not a GitHub developer profile",
+                "URL is not an OpenAlex author",
                 retryable=False,
             )
 
-        url = f"{_API_ROOT}/users/{login}"
+        url = f"{_API_ROOT}/authors/{author_id}{self._mailto_suffix('?')}"
         try:
             response = await self._transport.get(
                 url,
@@ -204,7 +205,7 @@ class GitHubDeveloperActivitySource:
                 AcquisitionStatus.FAILED,
                 operation_id,
                 "transport_error",
-                "developer-source acquisition request failed",
+                "scholarly-source acquisition request failed",
                 retryable=True,
             )
 
@@ -219,7 +220,7 @@ class GitHubDeveloperActivitySource:
                 media_type=_JSON_MEDIA_TYPE,
                 content_sha256=sha256(response.body).hexdigest(),
                 source_event_time=KnowledgeValue[datetime].unknown(
-                    "GitHub user record has no single authoritative event time"
+                    "OpenAlex author record has no single authoritative event time"
                 ),
             )
         if response.status in {403, 429}:
@@ -228,7 +229,7 @@ class GitHubDeveloperActivitySource:
                 AcquisitionStatus.BLOCKED,
                 operation_id,
                 "rate_limited",
-                "GitHub rate limit or access restriction",
+                "OpenAlex rate limit or access restriction",
                 retryable=True,
             )
         if response.status == 404:
@@ -237,7 +238,7 @@ class GitHubDeveloperActivitySource:
                 AcquisitionStatus.FAILED,
                 operation_id,
                 "not_found",
-                "GitHub developer profile not found",
+                "OpenAlex author not found",
                 retryable=False,
             )
         return self._acquisition_failure(
@@ -277,4 +278,4 @@ class GitHubDeveloperActivitySource:
         )
 
 
-__all__ = ["GitHubDeveloperActivitySource"]
+__all__ = ["OpenAlexResearchSource"]
