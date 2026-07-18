@@ -14,6 +14,11 @@ Promising founders are currently discovered through fragmented signals and evalu
 - Instrument elapsed time and failures from first signal or application through decision readiness to demonstrate the 24-hour target.
 - Organize implementation as contract-first parallel workstreams for an SWE and a Data/ML specialist, with shared domain schemas, fake adapters, contract tests, and frequent integration through this single OpenSpec change.
 - Keep generic web discovery behind a replaceable adapter and require a recorded human selection before committing P0 to exactly one of Tavily, Exa, another provider, or no generic provider; a source-specific live path remains available, and a two-provider runtime is deferred.
+- Broaden outbound sourcing to a wide open-source-intelligence (OSINT) source palette spanning developer activity, scholarly output, patents, launches, technical-community reputation, long-form writing, cohorts, and approved professional and social profiles, building one cross-source-corroborated profile per Founder within public, lawful, and robots- and terms-respecting limits.
+- Grade the Founder Axis and Founder Score with an evidence-weighted trait taxonomy that favors costly-to-fake, peer-validated signals and excludes non-predictive folklore such as charisma, pedigree, youth, and raw team size from founder quality.
+- Attach calibrated confidence bands to subjective sub-assessments through repeated reasoned sampling that stays provider-neutral and needs no token log-probabilities, addressing the confidence-scoring research question.
+- Express a builder-signal read distinct from a fundability read and surface strong-builder, low-fundability Founders as underrated opportunities.
+- Anchor calibration on observed building outcomes rather than funding history, add counterfactual identity-swap bias checks and subgroup calibration, and provide a hold-out predictive-validity evaluation.
 - Keep portfolio monitoring, follow-on investing, fund operations, exit-management UI, autonomous outreach, actual money movement, and any unreviewed commitment to an investment-intelligence model provider or agent-orchestration framework out of this MVP. The narrow Mistral OCR selection does not approve model-backed investment analysis.
 
 ## Capabilities

@@ -203,3 +203,90 @@ The selected Mistral OCR adapter SHALL use a bounded stateless OCR request rathe
 #### Scenario: API response references an external provider
 - **WHEN** a client retrieves ingestion status or evidence
 - **THEN** no provider secret or private internal credential is included in the response
+
+### Requirement: Outbound sourcing draws on a broad OSINT source palette
+The system SHALL support open-source-intelligence (OSINT) collection across many independent public source categories rather than only developer activity and professional profiles. Supported categories SHALL include developer activity, scholarly and research output, patents, company and regulatory and court-filing registries, product launches, technical-community reputation, long-form authored writing, accelerator and hackathon cohorts, and approved professional and social profiles. Each category SHALL be collected through the provider-neutral ingestion interface, SHALL preserve original-source provenance, and one category's absence MUST NOT become a negative fact. OSINT collection SHALL serve both outbound discovery of new Outbound Candidates and enrichment or verification of inbound Applications.
+
+#### Scenario: Multiple OSINT categories enrich one candidate
+- **WHEN** outbound collection finds source-backed signals for one Outbound Candidate across three or more independent categories
+- **THEN** the system records each as a separately provenanced Source Artifact and builds one candidate profile without collapsing them into a single opaque score
+
+#### Scenario: A source category is unavailable
+- **WHEN** an OSINT category cannot be collected because of no access, no result, or a disallowed source
+- **THEN** the affected fields remain Unknown, the gap lowers coverage only, and no negative Observation is created
+
+#### Scenario: Authoritative source is preferred over a generic snippet
+- **WHEN** a source-specific API can supply an authoritative activity or research fact
+- **THEN** the system records it as primary Evidence in preference to a generic web-discovery snippet
+
+#### Scenario: OSINT enriches an inbound application
+- **WHEN** a founder submits an inbound Application with a company name and deck
+- **THEN** the same OSINT collection may corroborate or contradict the Application's Claims against public Evidence rather than being reserved for outbound discovery
+
+#### Scenario: Registry confirms a prior venture
+- **WHEN** a company or court-filing registry records a Founder's earlier company, role, or incorporation
+- **THEN** the system stores it as provenanced Evidence available to the founder track-record Claims without inferring outcome quality from the registry alone
+
+### Requirement: Cross-source corroboration resolves one person from many footprints
+The system SHALL attempt to link OSINT signals about the same Founder or Company across independent sources into one canonical identity using evidence-backed, reversible identity resolution, and SHALL treat agreement between independent sources as corroboration that raises Claim Trust and sourcing priority. A Claim supported by only one source SHALL be marked single-source, and corroboration MUST NOT be inferred from a generic provider's own relevance ranking.
+
+#### Scenario: Same founder is found across independent sources
+- **WHEN** independent sources describe the same Founder with sufficient matching identity Evidence
+- **THEN** the system links them to one canonical Founder, preserves each alias and source, and records the corroboration on the affected Claims
+
+#### Scenario: Independent sources agree on a fact
+- **WHEN** two independent Source Artifacts support the same Claim
+- **THEN** the Claim's Trust Score records multi-source corroboration and references both Evidence locators
+
+#### Scenario: Cross-source identity is ambiguous
+- **WHEN** footprints share a name but lack sufficient corroborating identity attributes
+- **THEN** the system keeps them separate and creates an identity-review item rather than merging different people
+
+#### Scenario: OSINT signals deduplicate two candidate records
+- **WHEN** two Outbound Candidate or Application records are linked by shared cross-source OSINT identity signals such as a matching handle, verified profile, or registry identifier
+- **THEN** the system treats those signals as match Evidence, resolves the records to one canonical Founder or Company under the reversible identity-resolution policy, and preserves both source histories
+
+### Requirement: OSINT collection stays within public, lawful, and ethical limits
+The system SHALL collect only publicly available information, SHALL respect each source's terms of service and robots directives, and MUST NOT access authentication-walled or private data or attempt to re-identify individuals from data they did not make public. Data classification and an allow or deny policy SHALL be applied before any content is sent to a third party, credentials SHALL remain server-side, and the collection purpose and source terms SHALL be recorded for every OSINT Source Artifact.
+
+#### Scenario: Source forbids automated collection
+- **WHEN** a candidate source's terms or robots directives disallow automated collection
+- **THEN** the system skips it, records the skip reason, and does not collect from it
+
+#### Scenario: Private or auth-walled data is encountered
+- **WHEN** reaching a fact would require private access, credentials, or bypassing an access control
+- **THEN** the system does not collect it and records the boundary rather than the value
+
+#### Scenario: OSINT artifact records its terms
+- **WHEN** an OSINT Source Artifact is stored
+- **THEN** it carries its origin, data classification, collection purpose, and source terms alongside its retrieval metadata
+
+#### Scenario: Intrusive collection technique is out of scope
+- **WHEN** a proposed collection method relies on account-existence enumeration, deanonymizing a pseudonymous account, ingesting breached or leaked datasets, or extracting data from a device
+- **THEN** the system does not use it, because such methods are prohibited regardless of whether their inputs appear public
+
+### Requirement: Personal-data processing has a lawful basis and purpose limitation
+The system SHALL process personal data of Founders only for the stated purpose of investor sourcing and evaluation, SHALL record a lawful basis for that processing, and MUST NOT treat public availability alone as sufficient justification. Discovery SHALL NOT imply consent; outreach SHALL invite a Founder to submit an Application rather than acting on a silently built profile, and a Founder SHALL be able to request correction or removal of their record through an auditable action.
+
+#### Scenario: Public data still requires a purpose
+- **WHEN** the system collects public personal data about a Founder
+- **THEN** it records the sourcing-and-evaluation purpose and lawful basis and does not repurpose that data for an unrelated use
+
+#### Scenario: Removal is requested
+- **WHEN** a Founder requests correction or removal of their personal record
+- **THEN** the system records an auditable action, removes or corrects the protected content, and makes dependent derived records unavailable rather than silently altering history
+
+### Requirement: Sourcing-channel effectiveness and collection value are measured, not learned
+The system SHALL record which source category or channel produced each candidate and SHALL be able to report channel effectiveness as telemetry, and SHALL apply a collection-value policy that prefers cheap high-signal sources and flags low-confidence or low-value data rather than over-collecting. These measures SHALL remain descriptive telemetry and MUST NOT become learned scoring weights, and channel statistics computed from small samples SHALL be marked provisional.
+
+#### Scenario: Channel provenance is recorded
+- **WHEN** a candidate is created from an outbound source
+- **THEN** the system records which channel produced it so channel effectiveness can be reported later without altering the candidate's assessment
+
+#### Scenario: Low-value collection is flagged rather than expanded
+- **WHEN** an additional source would add cost but little new signal or only low-confidence data
+- **THEN** the system flags it as low-value and leaves the field Unknown rather than over-collecting
+
+#### Scenario: Channel statistics are provisional on small samples
+- **WHEN** channel effectiveness is computed from few observations
+- **THEN** the report marks the statistic provisional and does not feed it back as a scoring weight

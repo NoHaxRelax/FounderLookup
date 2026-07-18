@@ -236,3 +236,18 @@ The visual theme SHALL use low-saturation rice-paper, celadon, jade, or ink-like
 #### Scenario: Dense analytical view is displayed
 - **WHEN** the investor reviews a data-dense dashboard or memo
 - **THEN** neumorphic elevation is limited to meaningful grouping and does not reduce table readability, compress evidence labels, or make every item appear interactive
+
+### Requirement: The underrated-founder gap and confidence are visible
+The investor experience SHALL surface, where present, the builder-signal versus fundability reading and SHALL flag Founders with strong builder signal and low fundability as underrated opportunities, and SHALL show the confidence band on subjective assessments alongside their evidence coverage. These SHALL be presented as distinct, labeled signals and MUST NOT be collapsed into the three axes or into a single overall score.
+
+#### Scenario: An underrated founder is highlighted
+- **WHEN** a Founder has strong builder-signal Evidence but low conventional fundability
+- **THEN** the experience labels the gap as an underrated-opportunity signal and links to the Evidence behind each read
+
+#### Scenario: Confidence is shown with coverage
+- **WHEN** a subjective assessment carries a confidence band
+- **THEN** the experience shows the band and its evidence coverage so that a wide band from sparse evidence is not read as a low score
+
+#### Scenario: The gap does not replace the axes
+- **WHEN** the builder-versus-fundability reading is displayed
+- **THEN** it appears as a distinct labeled signal and the three independent axes remain separately visible

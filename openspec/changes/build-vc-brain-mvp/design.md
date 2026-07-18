@@ -198,7 +198,7 @@ Before adding a provider SDK to the runtime project, the Data/ML workstream pref
 
 Tavily currently exposes Search, Extract, Crawl, and Map capabilities. Exa currently exposes Search with content/highlight options, domain/date filters, categories including people, company, and research papers, and structured outputs. These capabilities are inputs to a benchmark, not a selection. A human reviewer records exactly one generic provider—Tavily, Exa, or another—or no generic provider as the P0 choice. Only then is the selected generic adapter and SDK added. Running two generic providers is deferred to a separate follow-up change.
 
-Tavily is the current working front-runner, but this is not the human approval required by the gate and no Tavily dependency is added during the shared-contract freeze. OSINT-style multi-source discovery and correlation is a possible stretch direction only; it remains outside P0 until its sources, permitted techniques, privacy/terms constraints, evidence rules, and review boundary are explicitly proposed and approved.
+Tavily is the current working front-runner, but this is not the human approval required by the gate and no Tavily dependency is added during the shared-contract freeze. OSINT-style multi-source discovery and correlation has since been proposed with its sources, permitted and excluded techniques, privacy and terms constraints, evidence rules, and human-review boundary (see Decision 14 and the OSINT requirements in `opportunity-data-ingestion`) and is approved into P0 on that basis.
 
 Choosing no generic provider does not invalidate the P0 slice: the human-approved source-specific adapter becomes the bounded live discovery path as well as the authoritative verifier. If no candidate live adapter is accessible at all, the gate is blocked and the change must be revised explicitly rather than pretending a fake run is live.
 
@@ -445,6 +445,51 @@ This MVP remains one OpenSpec change because both developers are implementing on
 
 Only create a second OpenSpec change later for a behaviorally separable follow-up, such as production multi-tenancy or adding a second provider after the MVP—not for developer assignment.
 
+### 14. Source outbound candidates from a broad OSINT palette with cross-source corroboration
+
+Outbound sourcing collects from many independent public categories rather than one or two profiles: developer activity, scholarly and research output, patents, product launches, technical-community reputation, long-form writing, accelerator and hackathon cohorts, and approved professional and social profiles. Each category is a provider-neutral adapter with a deterministic fake. Free, authoritative source-specific APIs (developer activity, scholarly indexes, technical-community, patents) are preferred as primary Evidence; access- or terms-restricted sources such as major professional and social networks are mocked or licensed rather than scraped live. The same Founder or Company found across independent sources is linked by evidence-backed, reversible identity resolution, and agreement between independent sources raises Claim Trust and sourcing priority. Collection stays public, honors robots and terms, never crosses an access control or re-identifies non-public data, and classifies data before any external transfer.
+
+**Alternatives considered:**
+
+- Single-source outbound (developer activity only): rejected as too narrow to build the versatile cross-source profile the brief rewards and to serve non-developer founders.
+- Live scraping of major professional or social networks: rejected for the MVP as terms-of-service-risky and legally fragile; mock or licensed data is used instead.
+
+### 15. Estimate confidence by resampling the reasoned score
+
+Subjective sub-assessments such as resilience, founder-market fit, and execution carry a confidence band. The demo path samples the reasoned sub-score several times and derives the band from the dispersion of those samples; it is framework- and provider-neutral and needs no token log-probabilities, so it works with the eventually approved model whether or not that provider exposes them. A large gap between an initial pre-reasoning snap estimate and the final reasoned estimate lowers confidence and is retained as a factor. This directly addresses the brief's confidence-scoring research question of building prediction intervals around soft-skill assessments.
+
+An optional research lane, off the demonstration path and not a runtime dependency, may explore token-level uncertainty by reading answer-token log-probabilities from a logprob-capable model, or by running a local small-model ensemble on available HPC to approximate the answer distribution. The writeup must note that a small local ensemble measures those models' confusion rather than the strong model's epistemic uncertainty. Numeric intervals are shown only after the method is documented and calibrated against fixtures.
+
+These methods run through the framework-neutral analysis harness of Decision 9. The team's current recommendation entering the model and orchestration gate is plain Python orchestration with a single model-provider SDK rather than a heavier agent framework; that recommendation is recorded here as input to the human decision, not a bypass of the gate.
+
+### 16. Grade founders on evidence, separate builder signal from fundability, and audit for bias
+
+The Founder Axis and Founder Score factors form a versioned trait taxonomy graded by two things: how strongly evidence links a trait to building success, and how costly its supporting signal is to fabricate. Costly-to-fake, peer-validated signals such as externally adopted work, corroborated domain experience, and sustained follow-through outweigh gameable vanity signals such as follower counts, repository stars, and self-authored endorsements. Attributes the evidence does not support as success predictors, including presentation charisma, institutional pedigree, youth, and raw team size, do not raise founder quality and appear only as neutral context or a bias flag. The system expresses a builder-signal read separately from a fundability read and can surface strong-builder, low-fundability Founders as underrated, which operationalizes the brief's equitable-capital-allocation goal. Calibration is anchored on observed building outcomes and never on historical funding decisions, because funding history encodes network and demographic bias; a standing counterfactual identity-swap check and subgroup calibration guard against that bias, and a hold-out evaluation of rank agreement, band coverage, and a capital-raised baseline tests whether the scoring carries real signal, addressing the founder-traits research question.
+
+Evidence base: age and prior-success findings (Azoulay et al.; Gompers et al.), unicorn-founder data (Tamaseb), the weak-grit result (Credé et al.), and the charisma-trap and venture-bias literature.
+
+**Alternatives considered:**
+
+- A single blended founder score: rejected because it would hide the builder-versus-fundability gap that is the system's differentiating insight.
+- Training scores on who was previously funded: rejected because it launders historical bias into the label and rebuilds the network-gated status quo the challenge exists to replace.
+
+### 17. Treat public founder data under a lawful-basis and purpose-limitation posture
+
+The system processes founders' personal data only for investor sourcing and evaluation and records a lawful basis for it; public availability alone is not treated as sufficient justification. Discovery never implies consent. The workflow is deliberately consent-forward: the system surfaces a candidate, a human reviews, and outreach invites the Founder to submit an Application, so a person is evaluated once they engage rather than acted on from a silently built dossier. Founders can request correction or removal through an auditable action. This posture is captured as requirements in `opportunity-data-ingestion` (lawful basis and purpose limitation, public-lawful-ethical limits, and the excluded intrusive techniques).
+
+**Alternatives considered:**
+
+- "It is public, therefore fair game": rejected because public availability does not remove data-protection obligations, and it is the exact reasoning that produces surveillance rather than responsible sourcing.
+
+### 18. Recorded implementation notes feeding the human gates
+
+Recommendations for the model, orchestration, and evidence implementation, recorded as input to the Decision 9 gate rather than as resolutions:
+
+- Evidence citation: capture each Claim's supporting quote and source locator as fields on the Claim and Evidence schema. Do not rely on a model provider's native citation feature that is incompatible with constrained structured output; a schema field is provider-neutral and always available.
+- Model routing: a higher-capability model for reasoning, scoring, and memo synthesis, and a cheaper fast model for high-volume dedup, tagging, and enrichment. The specific providers remain the gate's decision.
+- Reasoning trace: capture a step-level execution and evidence audit trail (inputs, sources, rule outcomes, accepted structured outputs, and versions) for the traceability requirement, without private chain-of-thought.
+- Entity resolution: match on deterministic stable keys (domain, developer handle or organization, verified profile, registry identifier) plus a fuzzy fallback, and treat cross-source OSINT agreement as additional match Evidence under the reversible identity-resolution policy.
+
 ## Risks / Trade-offs
 
 - **Scope explosion across sources and agents** → Build against fakes from the contract freeze, demonstrate at most one human-selected generic provider plus one source-specific path—or only the source-specific path when no generic provider is selected—bound all runs, and move hardening into a later OpenSpec change.
@@ -494,7 +539,7 @@ The following work is deliberately outside `build-vc-brain-mvp`. It must be prop
 
 - production schema migrations, richer retention/deletion workflows, malware-service integration, and comprehensive private-file audit history;
 - cursor-stable collection snapshots, standalone CRUD/relationship routes for every domain record, Decision correction/supersession, exhaustive error/rate-limit cases, and broader security testing;
-- production scheduling and operational monitoring, broader recurring-source coverage, deeper crawl/map features, expanded source categories, a second generic provider, or policy-reviewed OSINT-style multi-source correlation;
+- production scheduling and operational monitoring, broader recurring-source coverage, deeper crawl/map features, expanded source categories, or a second generic provider;
 - score and Trust calibration on a larger labeled corpus and numerical intervals only when statistically defensible;
 - exhaustive cross-browser and assistive-technology certification beyond the P0 keyboard, contrast, reflow, forced-colors, reduced-motion, and semantic-state acceptance checks;
 - production multi-tenancy, portfolio workflows, or learned investment weights.

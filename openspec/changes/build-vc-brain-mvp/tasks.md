@@ -30,6 +30,9 @@
 - [ ] 3.6 **[P0][DATA/ML]** Implement the affirmative cold-start path using work-product Evidence, an exploration/coverage-aware view, and the smallest useful next Evidence or interview request rather than exhaustive intake.
 - [ ] 3.7 **[P0][DATA/ML]** Define framework-neutral market, idea novelty/quality, founder dossier, adversarial validation, and memo-synthesis interfaces with structured fake outputs and tests for unsupported Claims, contradictions, presentation proxies, and citation completeness.
 - [ ] 3.8 **[P0][DATA/ML]** Preflight Tavily and Exa access, credentials, terms, and permitted test data, then run an isolated bake-off through the provider-neutral contract on representative queries and the labeled corpus where access exists. Compare relevance, coverage, provenance, freshness, latency, cost, limits, failures, and SDK/API ergonomics without adding either SDK to runtime dependencies; mark an unavailable candidate `not_live_tested` and complete a desk review rather than blocking the gate.
+- [ ] 3.9 **[P0][DATA/ML]** Define the OSINT source palette (developer activity, scholarly/research, patents, launches, technical-community, long-form writing, cohorts, and approved professional/social) as provider-neutral adapters each with a deterministic fake; anchor free authoritative source-specific APIs (developer activity, scholarly indexes, technical-community, patents) and add fixtures for cross-source corroboration and cross-source duplicate identity. Record public-only, robots/terms, and data-classification limits.
+- [ ] 3.10 **[P0][DATA/ML]** Implement the versioned evidence-graded founder trait taxonomy and the separate builder-signal and fundability reads, weighting costly-to-fake, peer-validated signals above gameable vanity signals and excluding non-predictive attributes from founder quality; verify with cold-start, gameable-signal, folklore, and under-networked-strong-builder fixtures.
+- [ ] 3.11 **[P0][DATA/ML]** Implement the framework-neutral confidence-band estimator by resampling the reasoned sub-score, the snap-versus-reasoned divergence factor, and the coverage-threshold abstention; add the counterfactual identity-swap bias check and the subgroup-calibration report, and prove missing history never decrements quality.
 
 ## 4. Human Search-Provider Gate and Live Sourcing
 
@@ -55,6 +58,9 @@
 - [ ] 6.4 **[P0][DATA/ML]** Implement cited memo and Recommendation synthesis with the five required sections, explicit gaps, immutable revisions, and structured audit summaries without private chain-of-thought.
 - [ ] 6.5 **[P0][SWE]** Integrate live intelligence behind existing interfaces and run resources so API and UX contracts remain unchanged from deterministic fakes.
 - [ ] 6.6 **[P0][DATA/ML]** Run and document the evaluation harness for query-plan correctness, cold-start bias, hard-filter authority, score monotonicity, source silence, contradictions, citation completeness, structured-output validity, and repeatability.
+- [ ] 6.7 **[P0][DATA/ML]** Wire the confidence-band resampling, snap-versus-reasoned divergence, and identity-swap bias checks into the live founder, market, and idea analyses without changing the Assessment Envelope contract.
+- [ ] 6.8 **[P0][DATA/ML]** Run and document the hold-out predictive-validity evaluation (rank agreement, confidence-band coverage, capital-raised baseline, per identifiable subgroup) as the Area of Research 3 writeup.
+- [ ] 6.9 **[P0][DATA/ML]** Write up the confidence-scoring method (reasoned-sample dispersion, snap-versus-reasoned divergence, and calibration) as the Area of Research 1 deliverable, including the honest logprob and small-ensemble caveat.
 
 ## 7. P0 Joint Hackathon Slice
 

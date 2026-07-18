@@ -239,3 +239,74 @@ The system SHALL measure time from inbound Application acceptance or outbound fi
 #### Scenario: Case waits for founder information
 - **WHEN** a required diligence answer is pending from a Founder
 - **THEN** the timeline distinguishes active system processing from external waiting time without hiding either duration
+
+### Requirement: Soft-trait assessments carry a calibrated confidence band
+Each subjective sub-assessment that contributes to an Axis Assessment or the Founder Score, such as resilience, founder-market fit, or execution, SHALL carry an explicit confidence expression derived from repeated sampling of the reasoned estimate rather than from model self-report alone. The primary method SHALL sample the reasoned sub-score multiple times and derive a confidence band from the dispersion of those samples, and SHALL remain framework- and provider-neutral so it does not depend on token log-probabilities. A large divergence between an initial snap estimate and the final reasoned estimate SHALL lower confidence. A numeric interval SHALL be shown only after the method is documented and calibrated against fixtures.
+
+#### Scenario: A stable estimate yields a tight band
+- **WHEN** repeated reasoned samples of a sub-score agree closely
+- **THEN** the assessment reports high confidence and a narrow band
+
+#### Scenario: A volatile estimate yields a wide band
+- **WHEN** repeated reasoned samples of a sub-score disagree substantially
+- **THEN** the assessment reports low confidence and a wide band rather than one confident number
+
+#### Scenario: Snap and reasoned estimates diverge
+- **WHEN** an initial pre-reasoning estimate and the final reasoned estimate differ beyond a versioned threshold
+- **THEN** the recorded confidence is lowered and the divergence is retained as a factor
+
+#### Scenario: Cold-start evidence is sparse
+- **WHEN** a sub-assessment rests on little Evidence
+- **THEN** it is provisional, its band is wide, and low coverage is shown separately from the estimate
+
+### Requirement: Founder scoring uses an evidence-graded trait taxonomy
+The Founder Axis and Founder Score factors SHALL be organized as a versioned trait taxonomy in which each trait is graded by the strength of evidence that it predicts building success and by how costly its supporting signal is to fabricate. Costly-to-fake and peer-validated signals such as shipped and externally adopted work, corroborated domain experience, and sustained follow-through SHALL be weighted above easily gamed vanity signals such as follower counts, repository stars, or self-authored endorsements. Attributes that are not evidence-backed predictors of building success, including presentation charisma, institutional pedigree, youth, and raw team size, MUST NOT contribute positively to founder quality and MAY be recorded only as neutral context or a bias flag.
+
+#### Scenario: Costly-to-fake signal outranks a vanity metric
+- **WHEN** a Founder has strong externally adopted work but a low follower count
+- **THEN** the founder factors weight the adopted work above the follower count and explain why
+
+#### Scenario: Folklore attribute is excluded from quality
+- **WHEN** institutional pedigree or a polished presentation is present
+- **THEN** it does not raise founder quality and is recorded only as neutral context rather than a positive factor
+
+#### Scenario: Cold-start founder is graded on work product
+- **WHEN** a first-time Founder has only work-product Evidence and public writing
+- **THEN** the taxonomy scores those costly-to-fake artifacts and does not require gameable public-footprint signals
+
+### Requirement: The system distinguishes builder signal from fundability
+For each Founder the system SHALL express a builder-signal read derived from costly-to-fake and outcome-linked Evidence separately from a fundability read that reflects the signals the conventional funding market rewards such as network, pedigree, and prior funding. The system SHALL make the gap between the two reads visible and SHALL be able to surface Founders with strong builder signal and low fundability as high priority so that merit the network-gated market would overlook is not buried. Neither read SHALL be presented as the human Decision.
+
+#### Scenario: An under-networked strong builder is surfaced
+- **WHEN** a Founder shows strong builder-signal Evidence but low conventional fundability
+- **THEN** the system flags the Founder as an underrated opportunity and explains the gap with its Evidence
+
+#### Scenario: A well-networked weak builder is not inflated
+- **WHEN** a Founder has high fundability signals but weak builder Evidence
+- **THEN** the builder-signal read remains low and the gap is shown rather than averaged away
+
+### Requirement: Scoring is outcome-anchored and bias-audited
+Calibration of Founder Score, trait, and confidence rubrics SHALL be anchored on observed building outcomes and MUST NOT use historical funding decisions as the target, because funding history encodes network and demographic bias. The system SHALL support a standing counterfactual check that re-runs an assessment with identity-correlated attributes such as name, inferred gender, or school swapped and SHALL flag a material change in score as a bias defect, and SHALL be able to report score calibration separately for identifiable subgroups. Below a versioned Evidence-coverage threshold the system SHALL abstain with a wide band or route to human review rather than emit a confident low score.
+
+#### Scenario: A swap changes the score
+- **WHEN** an assessment is re-run with only identity-correlated attributes swapped and the score changes beyond a versioned tolerance
+- **THEN** the system flags a bias defect for review rather than shipping the score
+
+#### Scenario: Subgroup calibration is reported
+- **WHEN** calibration is evaluated
+- **THEN** the system can report rank agreement and interval coverage separately for identifiable subgroups so worse calibration for any subgroup is visible
+
+#### Scenario: Funding history is not the label
+- **WHEN** a scoring rubric is calibrated
+- **THEN** its target is an observed building outcome and not whether comparable founders were previously funded
+
+### Requirement: Founder-scoring predictive validity is measurable
+The MVP SHALL provide a versioned evaluation that tests whether Founder scoring carries real signal, using a hold-out set of Founders with known later outcomes scored blind to those outcomes. The evaluation SHALL report rank agreement such as a Spearman correlation between predicted founder rank and realized outcome, the calibration and coverage of the confidence bands, and a comparison against a naive capital-raised baseline, and SHALL report these separately for identifiable subgroups where sample size permits.
+
+#### Scenario: Scoring is compared to outcomes
+- **WHEN** blind scores are compared to held-out realized outcomes
+- **THEN** the evaluation reports rank agreement and whether the model beats a capital-raised baseline
+
+#### Scenario: Confidence bands are checked
+- **WHEN** calibration is evaluated
+- **THEN** the evaluation reports whether stated confidence bands contain the realized outcome at approximately their claimed rate
