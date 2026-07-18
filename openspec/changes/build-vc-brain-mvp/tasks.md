@@ -1,0 +1,64 @@
+## 1. P0 Scaffold and Shared Contract Freeze
+
+- [ ] 1.1 **[P0][SWE] FIRST IMPLEMENTATION STEP:** Create `backend/` with a project-authored `pyproject.toml`, initialize `uv` and `uv.lock`, add FastAPI plus test/quality dependency groups, and verify that no generic-search, model-provider, or agent-framework dependency is present.
+- [ ] 1.2 **[P0][SWE]** Create `src/founderlookup/{domain,ingestion,screening,api,infrastructure}`, `tests/{unit,contract,integration,fixtures}`, a minimal FastAPI health/OpenAPI smoke test, `backend/README.md`, and safe configuration examples.
+- [ ] 1.3 **[P0][PAIR]** Review `CONTEXT.md`, proposal, design, and four specs together; agree temporary file ownership, require OpenSpec-first behavior changes and paired shared-contract review, and designate one integrator to tick `tasks.md` only after PRs land on the shared integration branch.
+- [ ] 1.4 **[P0][PAIR]** Freeze v0 schema shapes, lifecycle vocabularies, and version identifiers for `KnowledgeValue`, Source Artifact/Observation/Claim/Evidence, provider-neutral discovery/acquisition, Opportunity Query Plan, score and Trust factor containers, axes, Assessment Envelope, Decision Readiness, memo, Recommendation, Decision, and Pipeline Run. Leave numeric rubrics and thresholds to task 3.4 and fixture review.
+- [ ] 1.5 **[P0][DATA/ML]** Create deterministic golden fixtures for at least five candidate examples across at least three early-signal categories, including a cold-start founder, returning founder, cross-signal candidate, duplicate identity, and seeded contradiction with expected structured outcomes.
+- [ ] 1.6 **[P0][PAIR]** Add shared schema/contract tests and deterministic fake discovery, intelligence, and run adapters; require both workstreams to pass this suite before merging shared changes.
+- [ ] 1.7 **[P0][PAIR] PARALLEL-SPLIT POINT:** After the planning artifacts, scaffold, v0 contracts, fixtures, and contract tests are committed through the team's normal user-approved Git workflow, create `work/swe-platform` and `work/data-intelligence` branches or worktrees from that same commit. If separate worktrees are impractical, keep one worktree and enforce the agreed file ownership instead.
+
+## 2. P0 SWE Platform Lane
+
+- [ ] 2.1 **[P0][SWE]** (depends on 1.4) Implement minimal SQLite persistence and private local Source Artifact storage for canonical entities, versions, Evidence, score snapshots, runs, memos, and audit events.
+- [ ] 2.2 **[P0][SWE]** Implement idempotent company-name-plus-PDF Application intake, signature/size checks, immutable hashes, page-addressable extraction, explicit Unknown values, and focused interview/follow-up artifact import.
+- [ ] 2.3 **[P0][SWE]** Implement fake-backed application services for preliminary candidate assessment, full Screening, Decision Readiness, memo, Recommendation, human Decision, and stage timing without a live model; preserve accepted stage outputs and provide bounded, authorized retry/resume from the last safe boundary.
+- [ ] 2.4 **[P0][SWE]** Implement the minimum `/api/v1` command/read-model surface: Application intake plus hashed/redacted/revocable founder status; thesis; sourcing run and Outbound Candidate activation/outreach state; query/screen commands; run status/retry; one nested Opportunity detail containing subject identity, assessment, Claims/Evidence, memo, Recommendation, and timing; and append-only human Decision. Keep stable Founder, Company, Screening Case, Claim, Evidence, and memo identifiers internally without requiring standalone CRUD routes or generic relationship traversal.
+- [ ] 2.5 **[P0][SWE]** Implement validated Opportunity Query Plan execution against canonical data, allowlisted deterministic filters, hard/preference/No Preference and Unknown semantics, bounded results with stable simple ordering, rejection of generated SQL or provider expressions, and append-only human overrides that preserve the original rule result, actor, time, and rationale.
+- [ ] 2.6 **[P0][SWE]** Select and record the frontend technology, scaffold it against the fake-backed OpenAPI contract, and implement four demo surfaces: founder intake/status; thesis+sourcing+outreach; Opportunity+Evidence; memo+Recommendation+human Decision.
+- [ ] 2.7 **[P0][SWE]** Apply the rice-paper/celadon/ink token direction with restrained neumorphic grouping and implement the four demo surfaces with semantic controls, keyboard access, visible focus, WCAG 2.2 AA contrast/non-color states, 320-CSS-pixel and 400%-zoom reflow, reduced-motion behavior, and a usable forced-colors fallback.
+- [ ] 2.8 **[P0][PAIR] Integration I1:** Demonstrate a deterministic fake end-to-end path from minimum inbound Application and fixture Outbound Candidate through Evidence, common full Screening, memo, and human Decision.
+
+## 3. P0 Data/ML Foundation Lane
+
+- [ ] 3.1 **[P0][DATA/ML]** (depends on 1.4) Define the versioned sourcing hypothesis and manually label the fixture corpus for top-result relevance, early trigger, reason to contact, source diversity/freshness, thesis outcomes, coverage, and identity result.
+- [ ] 3.2 **[P0][DATA/ML]** Implement baseline versioned identity resolution using stable identifiers and match Evidence, preserve aliases, represent approved merges as reversible links/events, and route ambiguous identities to human review; verify it with the duplicate and same-name fixtures.
+- [ ] 3.3 **[P0][DATA/ML]** Implement and test conviction-threshold logic plus candidate-keyed preliminary Assessment Envelopes with common criteria, provisional/Unknown Founder Score, three axes, Claims/Evidence, and explicit sparse coverage.
+- [ ] 3.4 **[P0][DATA/ML]** Implement versioned thesis-rule, provisional Founder Score, Claim Trust, contradiction, trend-sufficiency, and Decision Readiness rubrics and thresholds; prove reproducibility and that missing source history never decrements quality.
+- [ ] 3.5 **[P0][DATA/ML]** Implement the framework-neutral Query Planner interface and deterministic fake/baseline that maps one natural-language request to a validated Opportunity Query Plan with criteria, bounded retrieval requests, Unknown policies, and unresolved spans.
+- [ ] 3.6 **[P0][DATA/ML]** Implement the affirmative cold-start path using work-product Evidence, an exploration/coverage-aware view, and the smallest useful next Evidence or interview request rather than exhaustive intake.
+- [ ] 3.7 **[P0][DATA/ML]** Define framework-neutral market, idea novelty/quality, founder dossier, adversarial validation, and memo-synthesis interfaces with structured fake outputs and tests for unsupported Claims, contradictions, presentation proxies, and citation completeness.
+- [ ] 3.8 **[P0][DATA/ML]** Preflight Tavily and Exa access, credentials, terms, and permitted test data, then run an isolated bake-off through the provider-neutral contract on representative queries and the labeled corpus where access exists. Compare relevance, coverage, provenance, freshness, latency, cost, limits, failures, and SDK/API ergonomics without adding either SDK to runtime dependencies; mark an unavailable candidate `not_live_tested` and complete a desk review rather than blocking the gate.
+
+## 4. Human Search-Provider Gate and Live Sourcing
+
+- [ ] 4.1 **[P0][PAIR][HUMAN GATE — STOP]:** Review the task 3.8 benchmark, including every `not_live_tested` limitation, and wait for an explicit human selection of exactly one generic provider (Tavily, Exa, or another) or no generic provider for P0; do not select or add a provider automatically. Using two generic providers requires a later OpenSpec change.
+- [ ] 4.2 **[P0][PAIR]** Record the approved provider decision, rationale, budget, allowlisted source policy, and rejected alternatives in `design.md` or an ADR.
+- [ ] 4.3 **[P0][DATA/ML]** If 4.2 selects a generic provider, add and implement only that adapter with original-URL provenance, approved data-classification/allow-deny policy, content acquisition, request/cost/latency/failure telemetry, budgets, caching, and no-result-as-Unknown behavior. If no generic provider is selected, record the skip and use the source-specific discovery path in 4.4.
+- [ ] 4.4 **[P0][DATA/ML]** Implement one human-approved source-specific live adapter—prefer GitHub unless an alternate is recorded—for authoritative activity Evidence independent of any generic provider; when no generic provider is selected, it must also support the bounded P0 discovery demonstration.
+- [ ] 4.5 **[P0][SWE]** Integrate the approved live adapter or adapters into bounded asynchronous sourcing runs with Queued/Running/Succeeded/Partially Succeeded/Failed status, protected credentials, and authorized retry/resume that preserves successful records.
+- [ ] 4.6 **[P0][PAIR] Integration I2:** Demonstrate live outbound discovery with the approved adapter path on the labeled corpus, including three signal categories, one cross-signal candidate, one duplicate-resolution result, Evidence locators, a reason to contact, an editable outreach draft, and a partial/no-result case.
+
+## 5. Human Model and Agent-Framework Gate
+
+- [ ] 5.1 **[P0][DATA/ML]** Preflight candidate model access, credentials, terms, and private-data policy. Using only synthetic or fictional evaluation inputs unless a human explicitly approves the selected provider for private deck data, run isolated non-runtime probes where access exists through the shared structured-output harness; mark unavailable candidates `not_live_tested`. Compare model providers and plain Python, LangGraph, LangChain, LlamaIndex, and any proposed orchestration alternative on reliability, state/checkpoints, human review, tracing, tests, lock-in, latency, cost, privacy, dependency weight, and hackathon risk without adding runtime dependencies or configuration.
+- [ ] 5.2 **[P0][PAIR][HUMAN GATE — STOP]:** Present task 5.1 evidence and wait for an explicit human coder/reviewer prompt approving a named model provider and orchestration option; do not select, install, import, or configure one automatically.
+- [ ] 5.3 **[P0][PAIR]** Record the approved decisions and rationale in `design.md` or an ADR, including rejected options and fallback to deterministic fakes.
+- [ ] 5.4 **[P0][DATA/ML]** Only after 5.3, add approved dependencies through `uv`, refresh `uv.lock`, and add server-side configuration without secrets in source control.
+
+## 6. P0 Model-Backed Intelligence
+
+- [ ] 6.1 **[P0][DATA/ML]** Implement the approved Query Planner adapter as a schema-constrained call or justified bounded agent, preserving unresolved subjective phrases and leaving deterministic execution to the SWE-owned executor.
+- [ ] 6.2 **[P0][DATA/ML]** Implement market, idea novelty/quality, and founder-dossier analyses with cited supporting/counter Evidence, confidence, gaps, and founder-presentation bias prohibitions.
+- [ ] 6.3 **[P0][DATA/ML]** Implement adversarial validation, external corroboration, contradiction detection, Claim-level Trust factors, and fail-closed handling for malformed or unsupported output.
+- [ ] 6.4 **[P0][DATA/ML]** Implement cited memo and Recommendation synthesis with the five required sections, explicit gaps, immutable revisions, and structured audit summaries without private chain-of-thought.
+- [ ] 6.5 **[P0][SWE]** Integrate live intelligence behind existing interfaces and run resources so API and UX contracts remain unchanged from deterministic fakes.
+- [ ] 6.6 **[P0][DATA/ML]** Run and document the evaluation harness for query-plan correctness, cold-start bias, hard-filter authority, score monotonicity, source silence, contradictions, citation completeness, structured-output validity, and repeatability.
+
+## 7. P0 Joint Hackathon Slice
+
+- [ ] 7.1 **[P0][PAIR] Integration I3:** Demonstrate direct inbound and activated-then-applied outbound records converging on the same full Screening contract while preserving preliminary history and origin.
+- [ ] 7.2 **[P0][PAIR] Integration I4:** Demonstrate cold-start positive Evidence and focused follow-up, three-axis disagreement, a blocking contradiction, partial provider failure, founder-status access, and human-controlled outreach.
+- [ ] 7.3 **[P0][PAIR]** Verify the Decision Readiness policy, required memo sections, Claim citations/Unsupported states, Recommendation versus human Decision, stage timing, and result against the 24-hour target.
+- [ ] 7.4 **[P0][PAIR]** Run backend formatting/lint/type/tests, provider contract tests, API end-to-end tests, frontend checks, and targeted keyboard, contrast, 320-CSS-pixel/400%-zoom, forced-colors, reduced-motion, and semantic-state acceptance checks across the four demo surfaces; resolve P0 failures.
+- [ ] 7.5 **[P0][PAIR]** Update setup, source/data policy, architecture, demo script, score caveats, provider/framework decisions, known limitations, and the Recommendation/Decision/outreach/fund-transfer distinctions.
