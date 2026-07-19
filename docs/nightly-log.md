@@ -116,3 +116,21 @@ independence proven byte-for-byte). 31 tests; full suite 227 green. Commit cef56
 The screening judge now has both halves: numeric rubrics (claim trust + founder score),
 the three axes, builder-vs-fundability, and AR1 confidence. Next: assemble the
 candidate-keyed preliminary Assessment Envelope (3.3). No NEEDS ELIAS.
+
+## 2026-07-19, cycle 7
+Task 3.3: the outbound integration piece. `screening/preliminary.py`, deterministic +
+versioned (`conviction-threshold.v0`). `decide_conviction` reasons over the PATTERN of the
+three independent axis stances with a fixed precedence (pass / pursue / hold / gather_more),
+never an average: a hard-negative on any axis is always surfaced by name and always blocks
+pursue, and absence (an unknown axis, low coverage, or a provisional/unknown founder score)
+routes only to gather_more, never a hard pass. `assemble_preliminary_assessment` builds a
+schema-valid preliminary AssessmentEnvelope (decision_readiness=None, memo=None) so every
+frozen validator runs; `evaluate_preliminary_candidate` returns both.
+Adversarial verify earned its keep: it caught a real monotonicity bug (medium) where the
+pursue gate required ALL positive axes to clear the confidence floor, so a third positive
+axis with thin/unknown confidence demoted pursue to gather_more, lowering conviction below
+what two confident positives already justify. Fixed to require at least
+PURSUE_MIN_POSITIVE_AXES confident positives (a thin third axis never blocks) and added a
+monotonicity regression test before committing. 19 tests; full suite 246 green. Commit ef0219c.
+The outbound spine is now end to end: sources -> identity resolution -> rubrics + three axes
++ builder/fundability + confidence -> conviction + preliminary envelope. No NEEDS ELIAS.
