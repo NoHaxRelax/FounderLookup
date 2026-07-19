@@ -186,10 +186,19 @@ class FullAssessmentIdentity(DomainModel):
     mode: Literal["full"] = "full"
     origin: OpportunityOrigin
     application_id: StableId
+    outbound_candidate_id: StableId | None = None
     opportunity_id: StableId
     screening_case_id: StableId
     company_id: StableId
     founder_id: KnowledgeValue[StableId]
+
+    @model_validator(mode="after")
+    def outbound_origin_requires_candidate(self) -> Self:
+        if self.origin is OpportunityOrigin.OUTBOUND and self.outbound_candidate_id is None:
+            raise ValueError("outbound full assessment requires an Outbound Candidate")
+        if self.origin is OpportunityOrigin.INBOUND and self.outbound_candidate_id is not None:
+            raise ValueError("inbound full assessment cannot reference an Outbound Candidate")
+        return self
 
 
 AssessmentIdentity = PreliminaryAssessmentIdentity | FullAssessmentIdentity

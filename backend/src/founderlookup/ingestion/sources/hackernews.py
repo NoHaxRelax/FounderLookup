@@ -36,7 +36,7 @@ from founderlookup.ingestion.sources._support import (
 from founderlookup.ingestion.sources.http import HttpTransport, HttpTransportError
 
 _API_ROOT = "https://hn.algolia.com/api/v1"
-_ITEM_ROOT = "https://news.ycombinator.com/item"
+_USER_ROOT = "https://news.ycombinator.com/user"
 _ADAPTER_ID = "hackernews-social-v0"
 _JSON_MEDIA_TYPE = "application/json"
 _MAX_DISCOVERY_BYTES = 2_000_000
@@ -128,21 +128,13 @@ class HackerNewsSocialSource:
                 object_id = raw.get("objectID")
                 if not isinstance(object_id, str) or not object_id:
                     continue
-                rank += 1
-                story_url = raw.get("url")
-                original_url = (
-                    story_url
-                    if isinstance(story_url, str) and story_url
-                    else f"{_ITEM_ROOT}?id={object_id}"
-                )
                 author = raw.get("author")
-                headline = raw.get("title")
-                if isinstance(author, str) and author:
-                    title = author
-                elif isinstance(headline, str) and headline:
-                    title = headline
-                else:
-                    title = object_id
+                if not isinstance(author, str) or not author:
+                    continue
+                if not all(c.isalnum() or c in "-_" for c in author):
+                    continue
+                rank += 1
+                original_url = f"{_USER_ROOT}?id={urllib.parse.quote(author, safe='-_')}"
                 leads.append(
                     DiscoveryLead(
                         lead_id=f"hackernews-story-{slug(object_id)}",
@@ -151,7 +143,7 @@ class HackerNewsSocialSource:
                         source_category=self.source_category,
                         discovered_at=self._now(),
                         rank=rank,
-                        title=KnowledgeValue[str].known(title),
+                        title=KnowledgeValue[str].known(author),
                         provider_summary=KnowledgeValue[str].unknown(
                             "A Hacker News search result is a lead, not primary evidence"
                         ),

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Founder intake is minimal and transparent
-The experience SHALL allow a founder to submit an Application with only a company name and one pitch deck. Additional fields SHALL be visibly optional, and the page SHALL explain supported file constraints, processing purpose, submission state, and the 24-hour decision-readiness goal without requiring extra profile data.
+The experience SHALL allow a founder to submit an Application with only a company name and one pitch deck. Founder intake and status SHALL use a focused public shell that is separate from the investor workspace and MUST NOT expose an investor sidebar, thesis configuration, candidate queue, Opportunity, memo, Decision, or analyst-only terminology. Additional fields SHALL be visibly optional, and the page SHALL explain supported file constraints, processing purpose, submission state, and the 24-hour decision-readiness goal without requiring extra profile data.
 
 #### Scenario: Founder submits the minimum application
 - **WHEN** a founder provides a company name and supported deck
@@ -18,6 +18,10 @@ The experience SHALL allow a founder to submit an Application with only a compan
 #### Scenario: Founder cannot use drag and drop
 - **WHEN** a keyboard or assistive-technology user selects a deck
 - **THEN** a labeled native file control provides all functionality available through drag and drop
+
+#### Scenario: Founder opens the Application route
+- **WHEN** a founder follows a public Application or status link
+- **THEN** the page presents only the founder task, brand, privacy and processing context, and status or follow-up information, and no investor navigation item identifies Founder Apply as part of the investor workspace
 
 ### Requirement: Founder can securely learn the outcome
 The experience SHALL provide an unguessable founder-status link or equivalent capability after submission so company name plus deck remain the only required intake fields. The founder-facing view SHALL expose receipt time, current stage, focused follow-up requests, last update, the 24-hour target, and an approved final outcome or next action without exposing investor-only analysis.
@@ -60,6 +64,14 @@ The workspace SHALL present inbound Applications and outbound discoveries in one
 - **WHEN** an investor selects the activation action
 - **THEN** the experience requires explicit human confirmation, records intent to pursue an Application, and may show an editable evidence-backed outreach draft without implying that outreach or investment occurred automatically
 
+#### Scenario: Investor inspects ways to follow up
+- **WHEN** accepted outbound Evidence contains a source-published website, contact page, public email, or public profile
+- **THEN** the candidate detail presents those routes in a progressively disclosed contact panel with their source locator and unverified-identity state, and never invents a route when the value is Unknown
+
+#### Scenario: Investor inspects an agentic sourcing run
+- **WHEN** an outbound candidate was produced by the bounded retrieval graph
+- **THEN** the audit layer exposes its query rounds, Evidence gaps, budgets, partial failures, and convergence stop reason without exposing private chain-of-thought
+
 #### Scenario: Investor completes outreach
 - **WHEN** an investor copies, sends through an approved human-controlled channel, or records completion of outreach
 - **THEN** the experience records actor, time, channel, and contact status while keeping the Outbound Candidate distinct from an Application
@@ -67,6 +79,25 @@ The workspace SHALL present inbound Applications and outbound discoveries in one
 #### Scenario: No records match
 - **WHEN** the active thesis and query yield no results
 - **THEN** the empty state identifies active constraints and offers a way to inspect, relax, or clear them
+
+### Requirement: Investor workflows use task-first progressive disclosure
+Each investor page SHALL make its current primary task, material blockers, and concise decision summary understandable without exposing the complete domain model at once. Secondary settings and analytical detail SHALL remain directly reachable through labeled collapsible regions, drawers, dialogs, or detail routes. Progressive disclosure MUST NOT hide information required for consent, a material contradiction, the three independent axes, the Recommendation-versus-Decision distinction, or the consequence of the primary action.
+
+#### Scenario: Investor opens sourcing
+- **WHEN** the sourcing workspace first renders
+- **THEN** the compound request and scannable candidate results form the primary layer, while thesis editing, source budgets, deterministic filters, and complete query interpretation are closed secondary controls whose active state remains summarized
+
+#### Scenario: Investor opens an Opportunity
+- **WHEN** an Opportunity detail first renders
+- **THEN** identity, readiness, Recommendation, material blockers, and a compact non-averaged three-axis summary appear first, while complete Claims, Evidence, Trust factors, provenance, and run history are available on demand
+
+#### Scenario: Investor opens a memo
+- **WHEN** the memo and Decision experience first renders
+- **THEN** Recommendation, evidence gaps, contradictions relevant to acting, and the explicit human Decision command appear first, while memo sections, adversarial detail, citations, and audit history are progressively disclosed
+
+#### Scenario: Secondary detail is hidden
+- **WHEN** criteria, Evidence, or diagnostics are collapsed
+- **THEN** their count, state, or material warning remains visible and the disclosure control has an accessible name and expanded state
 
 ### Requirement: Natural-language sourcing is inspectable
 The workspace SHALL let an investor submit a compound natural-language sourcing request in one interaction and SHALL show the resulting Opportunity Query Plan, including interpreted criteria, planned source categories, unresolved phrases, and Unknown policy before or alongside results. The investor SHALL be able to correct, remove, or confirm an interpreted criterion without manually rebuilding the request as separate filters.
@@ -80,7 +111,7 @@ The workspace SHALL let an investor submit a compound natural-language sourcing 
 - **THEN** that phrase is labeled unresolved and is not silently converted into a different filter
 
 ### Requirement: Dashboard preserves independent analytical signals
-The investor dashboard SHALL expose queue order, workflow stage, axis trends, evidence coverage, contradictions, elapsed time, and the three independent opportunity axes. It MUST NOT hide disagreement among the axes behind one average.
+The investor dashboard SHALL expose queue order, workflow stage, axis trends, evidence coverage, contradictions, elapsed time, and the three independent opportunity axes through a scannable summary with details on demand. It MUST NOT hide disagreement among the axes behind one average or give every metric equal visual weight.
 
 #### Scenario: Investor reviews screened opportunities
 - **WHEN** screened Opportunities are available
@@ -223,19 +254,19 @@ The default experience SHALL meet WCAG 2.2 AA contrast and non-color requirement
 - **THEN** non-essential transitions and animated status or trend effects are removed or reduced without losing information
 
 ### Requirement: Chinese-art-inspired neumorphism is progressive styling
-The visual theme SHALL use low-saturation rice-paper, celadon, jade, or ink-like environmental-gray surface tokens with palette-tinted highlights and shadows. Saturated cinnabar, azure, or jade accents SHALL be reserved for a small number of primary actions and active states. Neumorphic depth MUST remain decorative and MUST NOT be the only boundary, affordance, or state indicator.
+The visual theme SHALL use low-saturation rice-paper, celadon, jade, or ink-like environmental-gray surface tokens with palette-tinted highlights and shadows. Normal cards, inputs, buttons, panels, tags, and navigation items SHALL use zero-width borders; related tonal fills, rounded shape, spacing, and a consistent paired highlight/shadow or inset state SHALL create the soft tactile hierarchy. Saturated cinnabar, azure, or jade accents SHALL be reserved for a small number of primary actions and active states. Neumorphic depth MUST NOT be the only affordance or state indicator: labels, text/icon state, shape/fill changes, and explicit focus outlines remain required.
 
 #### Scenario: Default theme renders
 - **WHEN** the default visual theme is active
-- **THEN** muted environmental colors carry the surface hierarchy, saturated accents guide intentional action, and every text, control, focus, and Evidence state still meets contrast requirements
+- **THEN** muted environmental colors and borderless paired or inset depth carry the surface hierarchy, one saturated accent guides the primary action, and every text, control, focus, and Evidence state still meets contrast requirements
 
 #### Scenario: Decorative effects disappear
 - **WHEN** shadows, gradients, or other decorative effects are unsupported, disabled, removed in print, or overridden by forced colors
-- **THEN** labels, borders, fills, icons, and structure still distinguish controls and pressed, selected, disabled, focused, and contradicted states
+- **THEN** labels, fills, icons, spacing, and structure still distinguish controls and pressed, selected, disabled, focused, and contradicted states; forced-colors mode may add system-color borders or outlines
 
 #### Scenario: Dense analytical view is displayed
 - **WHEN** the investor reviews a data-dense dashboard or memo
-- **THEN** neumorphic elevation is limited to meaningful grouping and does not reduce table readability, compress evidence labels, or make every item appear interactive
+- **THEN** neumorphic elevation is limited to the current task and meaningful grouping, secondary detail is progressively disclosed, and the page does not compress evidence labels, make every item appear interactive, or render all analytical records at equal prominence
 
 ### Requirement: The underrated-founder gap and confidence are visible
 The investor experience SHALL surface, where present, the builder-signal versus fundability reading and SHALL flag Founders with strong builder signal and low fundability as underrated opportunities, and SHALL show the confidence band on subjective assessments alongside their evidence coverage. These SHALL be presented as distinct, labeled signals and MUST NOT be collapsed into the three axes or into a single overall score.

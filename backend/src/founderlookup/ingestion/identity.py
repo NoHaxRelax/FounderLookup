@@ -19,11 +19,17 @@ step. Confidences are heuristic and uncalibrated by design.
 from __future__ import annotations
 
 import urllib.parse
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
+from hashlib import sha256
+from typing import Final
 
 from founderlookup.domain.evidence import SourceCategory
+
+IDENTITY_RESOLUTION_VERSION: Final = "identity-resolution.v0"
+IDENTITY_LINK_EVENT_VERSION: Final = "identity-link-event.v0"
 
 
 class IdentitySignalKind(StrEnum):
@@ -42,6 +48,7 @@ class IdentitySignal:
     value: str
     source_category: SourceCategory
     source_ref: str
+    evidence_ids: tuple[str, ...] = ()
 
 
 class ResolutionStatus(StrEnum):
@@ -59,6 +66,8 @@ class MatchReason:
 class ResolvedEntity:
     """A candidate entity: a cluster of signals with a status and match reasons."""
 
+    resolution_id: str
+    resolution_version: str
     signals: tuple[IdentitySignal, ...]
     status: ResolutionStatus
     confidence: float
@@ -71,6 +80,137 @@ class ResolvedEntity:
     @property
     def source_refs(self) -> frozenset[str]:
         return frozenset(signal.source_ref for signal in self.signals)
+
+    @property
+    def aliases(self) -> tuple[str, ...]:
+        """Preserve every observed name/handle without choosing a destructive canonical value."""
+
+        values = {
+            signal.value.strip()
+            for signal in self.signals
+            if signal.kind in {IdentitySignalKind.NAME, IdentitySignalKind.HANDLE}
+            and signal.value.strip()
+        }
+        return tuple(sorted(values, key=lambda value: (value.casefold(), value)))
+
+    @property
+    def match_evidence_ids(self) -> tuple[str, ...]:
+        return tuple(sorted({item for signal in self.signals for item in signal.evidence_ids}))
+
+
+class IdentityLinkAction(StrEnum):
+    APPROVED = "approved"
+    REVERSED = "reversed"
+
+
+@dataclass(frozen=True)
+class IdentityLinkEvent:
+    """One append-only human decision; reversal never erases the original approval."""
+
+    event_id: str
+    link_id: str
+    left_entity_id: str
+    right_entity_id: str
+    action: IdentityLinkAction
+    actor_id: str
+    occurred_at: datetime
+    rationale: str
+    evidence_ids: tuple[str, ...] = ()
+    reverses_event_id: str | None = None
+    schema_version: str = IDENTITY_LINK_EVENT_VERSION
+
+
+class IdentityLinkLedger:
+    """Small append-only seam for approved, reversible canonical identity links."""
+
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], datetime],
+        id_factory: Callable[[str], str],
+    ) -> None:
+        self._clock = clock
+        self._id_factory = id_factory
+        self._events: list[IdentityLinkEvent] = []
+
+    @property
+    def events(self) -> tuple[IdentityLinkEvent, ...]:
+        return tuple(self._events)
+
+    @property
+    def active_links(self) -> tuple[IdentityLinkEvent, ...]:
+        reversed_ids = {
+            event.reverses_event_id
+            for event in self._events
+            if event.action is IdentityLinkAction.REVERSED
+        }
+        return tuple(
+            event
+            for event in self._events
+            if event.action is IdentityLinkAction.APPROVED and event.event_id not in reversed_ids
+        )
+
+    def approve(
+        self,
+        *,
+        left_entity_id: str,
+        right_entity_id: str,
+        actor_id: str,
+        rationale: str,
+        evidence_ids: tuple[str, ...],
+    ) -> IdentityLinkEvent:
+        left, right = sorted((left_entity_id.strip(), right_entity_id.strip()))
+        if not left or not right or left == right:
+            raise ValueError("identity link requires two different non-blank entities")
+        if not actor_id.strip() or not rationale.strip() or not evidence_ids:
+            raise ValueError("identity link approval requires actor, rationale, and Evidence")
+        if any(
+            (event.left_entity_id, event.right_entity_id) == (left, right)
+            for event in self.active_links
+        ):
+            raise ValueError("identity link is already active")
+        event = IdentityLinkEvent(
+            event_id=self._id_factory("identity-link-event"),
+            link_id=self._id_factory("identity-link"),
+            left_entity_id=left,
+            right_entity_id=right,
+            action=IdentityLinkAction.APPROVED,
+            actor_id=actor_id.strip(),
+            occurred_at=self._clock(),
+            rationale=rationale.strip(),
+            evidence_ids=tuple(dict.fromkeys(evidence_ids)),
+        )
+        self._events.append(event)
+        return event
+
+    def reverse(
+        self,
+        link_id: str,
+        *,
+        actor_id: str,
+        rationale: str,
+    ) -> IdentityLinkEvent:
+        approval = next(
+            (event for event in self.active_links if event.link_id == link_id),
+            None,
+        )
+        if approval is None:
+            raise ValueError("identity link is not active")
+        if not actor_id.strip() or not rationale.strip():
+            raise ValueError("identity link reversal requires actor and rationale")
+        event = IdentityLinkEvent(
+            event_id=self._id_factory("identity-link-event"),
+            link_id=approval.link_id,
+            left_entity_id=approval.left_entity_id,
+            right_entity_id=approval.right_entity_id,
+            action=IdentityLinkAction.REVERSED,
+            actor_id=actor_id.strip(),
+            occurred_at=self._clock(),
+            rationale=rationale.strip(),
+            reverses_event_id=approval.event_id,
+        )
+        self._events.append(event)
+        return event
 
 
 _STRONG_KINDS = frozenset(
@@ -172,11 +312,24 @@ def resolve_identities(signals: Sequence[IdentitySignal]) -> tuple[ResolvedEntit
     entities: list[ResolvedEntity] = []
     for members in final_clusters.values():
         member_signals = tuple(signals[index] for index in members)
+        resolution_material = "\x1f".join(
+            (
+                IDENTITY_RESOLUTION_VERSION,
+                *sorted(
+                    f"{signal.kind.value}:{_norm(signal.value)}:{signal.source_ref}"
+                    for signal in member_signals
+                ),
+            )
+        )
+        digest = sha256(resolution_material.encode()).hexdigest()[:32]
+        resolution_id = f"identity-resolution:{digest}"
         categories = {signals[index].source_category for index in members}
         refs = {signals[index].source_ref for index in members}
         if any(index in name_merged for index in members):
             entities.append(
                 ResolvedEntity(
+                    resolution_id=resolution_id,
+                    resolution_version=IDENTITY_RESOLUTION_VERSION,
                     signals=member_signals,
                     status=ResolutionStatus.NEEDS_REVIEW,
                     confidence=0.4,
@@ -191,6 +344,8 @@ def resolve_identities(signals: Sequence[IdentitySignal]) -> tuple[ResolvedEntit
         elif len(refs) >= 2:
             entities.append(
                 ResolvedEntity(
+                    resolution_id=resolution_id,
+                    resolution_version=IDENTITY_RESOLUTION_VERSION,
                     signals=member_signals,
                     status=ResolutionStatus.RESOLVED,
                     confidence=0.9 if len(categories) >= 2 else 0.8,
@@ -205,6 +360,8 @@ def resolve_identities(signals: Sequence[IdentitySignal]) -> tuple[ResolvedEntit
         else:
             entities.append(
                 ResolvedEntity(
+                    resolution_id=resolution_id,
+                    resolution_version=IDENTITY_RESOLUTION_VERSION,
                     signals=member_signals,
                     status=ResolutionStatus.RESOLVED,
                     confidence=0.6,
@@ -227,6 +384,11 @@ def resolve_identities(signals: Sequence[IdentitySignal]) -> tuple[ResolvedEntit
 
 
 __all__ = [
+    "IDENTITY_LINK_EVENT_VERSION",
+    "IDENTITY_RESOLUTION_VERSION",
+    "IdentityLinkAction",
+    "IdentityLinkEvent",
+    "IdentityLinkLedger",
     "IdentitySignal",
     "IdentitySignalKind",
     "MatchReason",

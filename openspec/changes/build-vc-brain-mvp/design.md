@@ -2,13 +2,13 @@
 
 The repository is greenfield except for the extracted hackathon brief and OpenSpec configuration. The brief makes Sourcing the most important MVP pillar, requires the Founder Score to persist across opportunities, requires three independent opportunity axes, and attaches Trust Score to individual claims. It accepts company name plus deck as the minimum inbound Application and expects outbound discovery to lead to outreach and a real Application before both paths converge on full Screening.
 
-The user selected Python, a project-owned `pyproject.toml`, `uv`, and FastAPI for the backend. Mistral OCR 4 is selected narrowly for pitch-deck extraction, using the configurable `mistral-ocr-latest` alias while persisting the concrete model returned by each run. No frontend technology, investment-intelligence model provider, agent-orchestration framework, or generic web discovery provider has been selected. Tavily and Exa are available candidates for outbound web discovery/content acquisition and require a human-reviewed bake-off.
+The user selected Python, a project-owned `pyproject.toml`, `uv`, and FastAPI for the backend. Mistral OCR 4 is selected narrowly for pitch-deck extraction, using the configurable `mistral-ocr-latest` alias while persisting the concrete model returned by each run. The frontend is React with TypeScript, Vite, and Ant Design v6; all components use `.tsx`. On 2026-07-19 the human reviewer selected Tavily as the single P0 generic web-discovery/content-acquisition provider, OpenAI `gpt-5.6-luna` for bounded strict Structured Outputs over acquired public content and model-backed analysis, and a thin LangGraph `StateGraph` only for the bounded outbound identify → retrieve/structure → assess-gaps → converge loop. The rebased inbound lane supplies framework-neutral specialist-analysis ports, deterministic fakes, and an optional GPT-5.6 Luna reasoner adapter; it does not make an inbound graph or framework checkpoint part of canonical Memory. Provider ports, validators, and intelligence responsibilities remain framework-neutral. Tavily and OpenAI are explicit server-side opt-ins; OpenAI output remains a proposed structured observation/analysis until deterministic provenance and domain validation accepts it.
 
 The stakeholders are:
 
 - a founder submitting a minimum Application;
 - a human investor configuring a thesis, reviewing evidence, and recording the Decision;
-- a coder/reviewer who must approve any agent-orchestration framework;
+- a maintainer who may later approve a named live investment-intelligence model provider;
 - an SWE and a Data/ML specialist implementing the same change in parallel;
 - hackathon judges assessing data architecture, intelligence and trust, investment utility, and UX.
 
@@ -36,7 +36,7 @@ The domain language is recorded in the repository `CONTEXT.md`. In particular, c
 - Multi-tenant identity, RBAC, collaborative deal rooms, or production fund administration.
 - Online learning of investment weights from funded outcomes.
 - Raw or hidden model chain-of-thought capture.
-- Selecting or adding a generic web provider or agent framework without the corresponding explicit human gate.
+- Adding a second generic web provider or expanding LangGraph beyond the selected bounded retrieval loop without a separate recorded decision and applicable data-policy configuration.
 
 ## Decisions
 
@@ -172,7 +172,7 @@ Historical observations and Founder Score snapshots are append-only. An approved
 
 The SWE owner (`DiaRar`) owns the real Mistral OCR adapter. Intake first validates and privately stores the original PDF, then calls a provider-neutral page-extraction interface. Deterministic tests use a fake extractor; the production adapter uses Mistral's stateless `/v1/ocr` endpoint with a configurable model default of `mistral-ocr-latest`. Each accepted result records the concrete returned model, page index, Markdown text, optional page confidence, usage metadata, input hash, and extraction time so Evidence can cite the immutable original deck and exact page. OCR output is an Observation input, not primary Evidence by itself.
 
-The adapter sends bounded PDF bytes directly in the stateless OCR request and does not use a public deck URL, Mistral Files API, Batch API, or another stateful upload path. `MISTRAL_API_KEY` remains server-side. Real founder-private decks are disabled by default and may be sent only when an explicit runtime policy confirms the approved account's training opt-out, retention or Zero Data Retention posture, permitted region, and collection purpose. Until that confirmation, live calls are limited to fictional or otherwise approved test documents; intake still preserves the original deck and leaves extracted fields Unknown if OCR is unavailable or blocked.
+The adapter sends bounded PDF bytes directly in the stateless OCR request and does not use a public deck URL, Mistral Files API, Batch API, or another stateful upload path. `MISTRAL_API_KEY` remains server-side. Real founder-private decks are disabled by default. The ordinary production path requires an explicit runtime policy confirming the approved account's training opt-out, retention or Zero Data Retention posture, permitted region, and collection purpose. For this deadline-bound hackathon deployment, the human reviewer explicitly approved a separate demo-only risk-acceptance override together with `allow_private` and a confirmed OCR-only purpose; that path records the unknown vendor/account controls rather than falsely marking them confirmed. Intake still preserves the original deck and leaves extracted fields Unknown if neither policy path permits transfer.
 
 This selection does not approve Mistral or any other provider for market, founder, idea, validation, memo, query-planning, or agentic investment analysis. Those uses remain behind the later human model/orchestration gate.
 
@@ -183,7 +183,7 @@ Official implementation and policy references: [Mistral OCR endpoint](https://do
 - Store only the latest normalized profile: rejected because trends, contradictions, and reproducibility would be lost.
 - Treat generated prose as evidence: rejected because models can summarize Evidence but cannot create primary Evidence.
 
-### 5. Select a generic discovery provider through a human gate
+### 5. Use Tavily as the single bounded generic discovery provider
 
 Generic web discovery is a true external dependency. The ingestion module owns two small provider-neutral interfaces: discover candidate URLs from a bounded Opportunity Query Plan, and acquire permitted content from selected original URLs. A deterministic fake is implemented first. Canonical domain records never import Tavily, Exa, or other provider response types.
 
@@ -198,7 +198,9 @@ Before adding a provider SDK to the runtime project, the Data/ML workstream pref
 
 Tavily currently exposes Search, Extract, Crawl, and Map capabilities. Exa currently exposes Search with content/highlight options, domain/date filters, categories including people, company, and research papers, and structured outputs. These capabilities are inputs to a benchmark, not a selection. A human reviewer records exactly one generic provider—Tavily, Exa, or another—or no generic provider as the P0 choice. Only then is the selected generic adapter and SDK added. Running two generic providers is deferred to a separate follow-up change.
 
-Tavily is the current working front-runner, but this is not the human approval required by the gate and no Tavily dependency is added during the shared-contract freeze. OSINT-style multi-source discovery and correlation has since been proposed with its sources, permitted and excluded techniques, privacy and terms constraints, evidence rules, and human-review boundary (see Decision 14 and the OSINT requirements in `opportunity-data-ingestion`) and is approved into P0 on that basis.
+The human reviewer selected Tavily on 2026-07-19 after the earlier no-generic-provider decision, based on available credentials, deadline fit, direct Search/Extract support, and the ability to keep exact original URLs behind the existing provider-neutral ports. The implementation uses direct bounded HTTP rather than adopting Tavily SDK types in canonical contracts. Exa remains the rejected P0 alternative and may be benchmarked later; running two generic providers is outside this change. This deadline selection is an explicit human override of the earlier bake-off sequence, not a claim that Tavily has won a statistically meaningful corpus benchmark.
+
+The server defaults to disabled even when `TAVILY_API_KEY` exists. Explicit enablement uses basic search/extract depth, at most one query, ten results, five acquired pages, 500,000 content bytes per acquisition, a 2,000,000-byte provider-response ceiling, and a 20-second timeout. Runtime configuration may only tighten or deliberately revise these bounded values. LinkedIn, Facebook, Instagram, X/Twitter, localhost/private-network targets, auth-walled content, and intrusive collection are excluded by default. Only public HTTP(S) original content may cross the acquisition boundary.
 
 Choosing no generic provider does not invalidate the P0 slice: the human-approved source-specific adapter becomes the bounded live discovery path as well as the authoritative verifier. If no candidate live adapter is accessible at all, the gate is blocked and the change must be revised explicitly rather than pretending a fake run is live.
 
@@ -215,7 +217,7 @@ Official evaluation references: [Tavily API overview](https://docs.tavily.com/do
 
 **Alternatives considered:**
 
-- Preselect Tavily because access exists: rejected because access does not demonstrate better sourcing quality for this corpus.
+- Preselect Tavily merely because access exists: initially rejected because access alone does not demonstrate better sourcing quality. The later explicit deadline decision selects it for the bounded P0 implementation while retaining that evaluation limitation.
 - Preselect Exa for semantic/people search features: rejected for the same reason; a representative bake-off is required.
 - Make either provider the canonical database: rejected because both are retrieval providers, not the system of record.
 - Use a generic provider alone for GitHub-style metrics: rejected because discovery results are less authoritative than a source-specific API or captured source record.
@@ -287,13 +289,15 @@ Persist auditable execution data: input snapshot, source references, rule outcom
 - Treat a framework checkpoint store as business Memory: rejected because retries and conversational state are not authoritative founder facts.
 - Log raw chain-of-thought: rejected because citations, structured decisions, and validation summaries provide useful auditability without exposing hidden reasoning.
 
-### 9. Enforce a human investment-intelligence model/orchestration-selection gate
+### 9. Use a thin LangGraph outbound loop with explicitly selected GPT-5.6 Luna Structured Outputs
 
-Except for the separately approved, ingestion-only Mistral OCR adapter above, no runtime implementation task may select, add, import, or configure an investment-intelligence model provider or LangGraph, LangChain, LlamaIndex, or another agent-orchestration framework until a human coder/reviewer explicitly approves the named choices and records the decision. Plain Python orchestration is included as an option, not merely a fallback; using an analysis model through plain Python still requires the model-provider decision.
+The human reviewer superseded the earlier plain-Python-only decision and approved a thin LangGraph `StateGraph` for outbound retrieval. The implemented graph uses `plan` → `retrieve_structure` → `assess_gaps`, conditionally returns to `plan`, and otherwise enters `finalize`. Configured follow-up-round, discovery-call, page, result, content-byte, and per-provider timeout bounds constrain it; accepted artifacts survive partial failure; repeated or empty Evidence forces convergence. Every round records its query, counts, Evidence delta and remaining gaps, and the loop records a terminal reason such as sufficient Evidence, no new Evidence, budget exhaustion, or partial failure. Remaining live acceptance must still demonstrate elapsed-time and cost behavior against real providers. The graph never activates a candidate lifecycle, sends outreach, verifies identity from a display name, records an investment Decision, or transfers funds. Provider adapters, structured validators, query-plan execution, market/idea/founder/adversarial analyses, and canonical Memory remain independently testable outside LangGraph.
 
-Before that gate, the Data/ML owner may run isolated evaluation probes through the framework-neutral harness after a credential, terms, and data-use preflight. These probes do not add SDKs or configuration to the runtime project. They use synthetic or fictional decks and profiles unless a human has explicitly approved a candidate provider's private-data policy. Inaccessible candidates are marked `not_live_tested` and may be desk-reviewed; the gate evidence must make that limitation visible.
+The human reviewer explicitly selected OpenAI `gpt-5.6-luna` and supplied a server-side API key. The outbound sourcing implementation uses a direct bounded Responses API call only after Tavily or a source-specific adapter acquires a PUBLIC artifact: capped content is sent with `store=false` and a strict JSON Schema generated from the versioned Pydantic contract. Output must carry exact source lines/excerpts and URLs; deterministic projection rejects values absent from the immutable input, unsafe URLs, identity verification, malformed/refused/incomplete responses, and outputs above configured budgets. The returned model version, response identifier, schema/adapter version, and token usage are retained as safe telemetry. The deterministic parser remains the fallback and successful source artifacts survive a model failure. This sourcing adapter rejects non-public artifacts even when generic OpenAI private-use flags are enabled.
 
-Before approval, implementation may complete:
+Founder-private processing is a separate demo boundary, not an implicit consequence of setting an API key. Mistral OCR may process a founder-private deck only when OCR, private transfer, an explicit OCR purpose, purpose confirmation, and the hackathon private-risk acknowledgement are all enabled, or when the normal training, retention, region, and purpose controls are confirmed. The risk acknowledgement records acceptance of unknown provider/account controls; it never claims training opt-out, Zero Data Retention, or a processing region. Any future founder-private GPT-5.6 Luna analysis likewise requires both the generic private-data flag and its separate hackathon-risk acknowledgement. Original decks remain access-controlled, and generated text never becomes primary Evidence or a human Decision without deterministic validation.
+
+The deterministic P0 implementation may complete:
 
 - project scaffolding;
 - the domain model and Pydantic contracts;
@@ -303,7 +307,7 @@ Before approval, implementation may complete:
 - framework-neutral analysis interfaces, fakes, and evaluation cases;
 - REST resources that do not require live model execution.
 
-The reviewer checkpoint compares candidate model providers on structured-output reliability, latency, cost, privacy, and evaluation results, and compares at least plain Python, LangGraph, LangChain, and LlamaIndex on state/checkpointing, human-in-the-loop support, traceability, testing, lock-in, dependency weight, and hackathon delivery risk. Work pauses at the first model- or framework-specific task until approval is recorded in this design or a dedicated ADR.
+The live-provider checkpoint measures schema adherence, evidence fidelity, latency, cost/usage, refusal/failure behavior, deterministic fallback, graph convergence, and budget enforcement. Expanding the graph into autonomous outreach or investment authority requires a later change.
 
 ### 10. Expose a resource-oriented FastAPI adapter
 
@@ -340,9 +344,11 @@ schema/allowlist validation + investor preview    [SWE]
               optional labeled semantic rerank
 ```
 
-“One pass” means one investor interaction, not necessarily one internal call or an autonomous agent loop. The MVP starts with a single schema-constrained planning call or deterministic parser. A bounded iterative agent is justified only if evaluation shows that gap-guided query refinement materially improves sourcing. The planner never executes SQL, directly decides eligibility, or treats search silence as proof of a negative; the deterministic executor owns those semantics.
+”One pass” means one investor interaction, not one provider call. The selected outbound `StateGraph` may refine retrieval from explicit Evidence gaps for a configured small number of rounds, then records `sufficient_evidence`, `no_new_evidence`, `budget_exhausted`, or `partial_failure` as its stop reason. The planner never executes SQL, directly decides eligibility, guesses private contact data, sends outreach, or treats search silence as proof of a negative; the deterministic executor owns those semantics.
 
 ### 11. Use an evidence-first, progressively neumorphic UX
+
+The founder and investor experiences are separate entry points. Founder Application and founder status are public capability-scoped journeys with a focused brand header, privacy/processing explanation, and no investor sidebar, thesis controls, candidate navigation, memo navigation, or analyst-only language. The investor shell never lists Founder Apply as a primary navigation item; investors may copy a founder invite/status link only from the relevant candidate or Application context.
 
 The information architecture covers only:
 
@@ -356,17 +362,29 @@ The information architecture covers only:
 6. memo and adversarial view;
 7. human Decision and processing timeline.
 
+Every investor page uses three deliberate disclosure layers:
+
+1. **Act:** the current state, one primary task or Decision, the three-axis summary where relevant, and material blockers.
+2. **Understand:** concise rationale, key gaps, and the few source-backed signals needed to choose the next action.
+3. **Audit:** interpreted query details, complete Claims/Evidence, Trust factors, source locators, run stages, versions, and diagnostics in collapsible regions, drawers, or dialogs.
+
+The first layer must be useful by itself. Technical provenance is never removed, but it is not rendered as an always-expanded domain dump. Secondary settings such as thesis criteria, source budgets, filters, and query interpretation stay behind clearly labeled controls and preserve their state. The founder path asks only for company name and a deck, then reveals receipt/status/follow-up progressively rather than showing investor machinery.
+
 The linked color-theory video supports three useful principles: choose saturation and brightness for emotional hierarchy, mix environmental colored grays from the palette, and reserve vivid color for a small number of focal points. The UX will therefore use rice-paper/celadon/jade/ink-like semantic surface tokens and limited cinnabar, azure, or deep-jade accents. These are starting directions, not historically authoritative fixed swatches.
 
-Neumorphic shadow depth is a progressive decorative layer for major surface grouping. Interactive controls retain semantic labels, visible boundaries, non-color states, and explicit focus outlines. Forced-colors mode, print, or unsupported shadows must leave the interface fully understandable. Dense tables and evidence views prioritize legibility over softness.
+The default visual language is borderless soft UI: app surfaces and ordinary controls use zero-width borders, closely related rice-paper/celadon fills, rounded geometry, and one consistent top-left light source expressed through paired highlight/shadow elevation or inset pressed states. Depth is selective: the primary action, input well, major task surface, and active state receive tactile treatment while most content remains visually quiet. Default Ant component borders are removed through theme/component tokens and a small app-owned CSS layer rather than brittle internal selectors.
 
-The frontend technology remains open. Whatever is selected must meet the UX spec's WCAG 2.2 AA, keyboard, responsive reflow, forced-colors, and reduced-motion requirements.
+Borderless does not mean affordance-free. Controls retain semantic labels, sufficient fill and text contrast, familiar shape, icon/text state, cursor behavior, pressed/selected treatment, and an explicit high-contrast `:focus-visible` outline. Destructive and critical states use text and iconography, not shadow or color alone. Forced-colors mode is the deliberate exception: system-color borders/outlines may replace shadows because user-agent accessibility settings take precedence over the aesthetic. Print or unsupported shadows must still preserve hierarchy through spacing, typography, fills, labels, and structure.
+
+The MVP frontend uses React with TypeScript, Vite, and Ant Design v6. React provides enough structure for the four stateful demo surfaces, typed API projections, accessible interaction state, and parallel component work without the extra application framework surface that the hackathon does not need. Ant Design supplies semantic interaction primitives and a token/component-token system; a root `ConfigProvider` and CSS variables apply the product palette without coupling business components to Ant's internal DOM. All React source components use `.tsx`; `.jsx` is not part of the project convention. The implementation must meet the UX spec's WCAG 2.2 AA, keyboard, responsive reflow, forced-colors, and reduced-motion requirements.
 
 **Alternatives considered:**
 
-- Full neumorphism on all controls: rejected because low-contrast boundaries and shadow-only states conflict with analytical density and accessibility.
+- Heavy beveling or equal neumorphic elevation on every item: rejected because it makes the interface noisy and obscures hierarchy. Borderless soft depth is limited to meaningful task surfaces and controls.
 - Generic neutral gray plus bright blue: rejected as visually sterile and unrelated to the requested design direction.
 - Decorative Chinese motifs: not required; the design takes palette and hierarchy principles rather than turning the interface into cultural pastiche.
+- Lit: rejected for the MVP because its deliberately small view layer would leave more application structure, state conventions, and component integration for the two-person team to establish during the hackathon.
+- Preact: viable, but not selected because bundle-size savings are less important here than React's familiar ecosystem and handoff path; the application avoids React-specific coupling in its typed API client.
 
 ### 12. Test at module interfaces and against decision fixtures
 
@@ -434,7 +452,7 @@ This MVP remains one OpenSpec change because both developers are implementing on
 4. Shared-contract behavior changes update this OpenSpec change first, receive both reviewers' approval, increment the schema/policy version, and land before dependent lane changes.
 5. SWE develops API/UX against deterministic fakes; Data/ML makes live adapters satisfy the same contract suite. Neither lane imports the other's implementation internals.
 6. Rebase `work/swe-platform` after each shared-contract change on `main` and run the combined contract suite before merging SWE work back to `main`.
-7. The SWE owner is the initial integrator and checks off `tasks.md` only after the corresponding work is present and verified on `main`; lane commits reference task and scenario IDs but do not compete to edit checkbox state.
+7. The SWE owner is the initial integrator. A checked task means the behavior is present and verified in the current change worktree; merge-to-`main` status is recorded separately and never inferred from a checkbox. Lane commits reference task and scenario IDs and one integrator owns checkbox reconciliation.
 
 **Joint integration checkpoints:**
 
@@ -447,7 +465,9 @@ Only create a second OpenSpec change later for a behaviorally separable follow-u
 
 ### 14. Source outbound candidates from a broad OSINT palette with cross-source corroboration
 
-Outbound sourcing collects from many independent public categories rather than one or two profiles: developer activity, scholarly and research output, patents, product launches, technical-community reputation, long-form writing, accelerator and hackathon cohorts, and approved professional and social profiles. Each category is a provider-neutral adapter with a deterministic fake. Free, authoritative source-specific APIs (developer activity, scholarly indexes, technical-community, patents) are preferred as primary Evidence; access- or terms-restricted sources such as major professional and social networks are mocked or licensed rather than scraped live. The same Founder or Company found across independent sources is linked by evidence-backed, reversible identity resolution, and agreement between independent sources raises Claim Trust and sourcing priority. Collection stays public, honors robots and terms, never crosses an access control or re-identifies non-public data, and classifies data before any external transfer.
+Outbound sourcing collects from many independent public categories rather than one or two profiles: developer activity, scholarly and research output, patents, product launches, technical-community reputation, long-form writing, accelerator and hackathon cohorts, and approved professional and social profiles. Each category is a provider-neutral adapter with a deterministic fake. Free, authoritative source-specific APIs (developer activity, scholarly indexes, technical-community, patents) are preferred as primary Evidence; access- or terms-restricted sources such as major professional and social networks are mocked or licensed rather than scraped live.
+
+For public hackathon and startup-showcase sources, the normalized unit preserves the event/cohort, project or team, explicitly published participant display names/profile links, repository/demo links, and explicitly linked public pitch deck. A participant display name is a source assertion, not automatically a verified Founder identity. The system may preserve a source-published website, contact page, public email, public profile, or other public route for human follow-up, but never guesses or enriches a private detail. Every route has a stable id, kind, label and value, validated optional link target, `public` classification, source artifact id/name/exact locator, and collection time. Public linked decks may be acquired only through the same URL, classification, robots/terms, content, request, and byte-budget controls as other sources; a missing or inaccessible deck stays Unknown. The same Founder or Company found across independent sources is linked only by evidence-backed, reversible identity resolution, and agreement between independent sources raises Claim Trust and sourcing priority. Collection stays public, honors robots and terms, never crosses an access control or re-identifies non-public data, and classifies data before any external transfer.
 
 **Alternatives considered:**
 
@@ -460,7 +480,7 @@ Subjective sub-assessments such as resilience, founder-market fit, and execution
 
 An optional research lane, off the demonstration path and not a runtime dependency, may explore token-level uncertainty by reading answer-token log-probabilities from a logprob-capable model, or by running a local small-model ensemble on available HPC to approximate the answer distribution. The writeup must note that a small local ensemble measures those models' confusion rather than the strong model's epistemic uncertainty. Numeric intervals are shown only after the method is documented and calibrated against fixtures.
 
-These methods run through the framework-neutral analysis harness of Decision 9. The team's current recommendation entering the model and orchestration gate is plain Python orchestration with a single model-provider SDK rather than a heavier agent framework; that recommendation is recorded here as input to the human decision, not a bypass of the gate.
+These methods run through the framework-neutral analysis harness of Decision 9. The resolved orchestration gate does not change their implementation: scoring, resampling, calibration, and bias checks stay ordinary testable Python behind neutral interfaces, while LangGraph controls only bounded outbound retrieval.
 
 ### 16. Grade founders on evidence, separate builder signal from fundability, and audit for bias
 
@@ -481,12 +501,12 @@ The system processes founders' personal data only for investor sourcing and eval
 
 - "It is public, therefore fair game": rejected because public availability does not remove data-protection obligations, and it is the exact reasoning that produces surveillance rather than responsible sourcing.
 
-### 18. Recorded implementation notes feeding the human gates
+### 18. Keep the resolved provider and framework boundaries narrow
 
-Recommendations for the model, orchestration, and evidence implementation, recorded as input to the Decision 9 gate rather than as resolutions:
+The resolved gates retain these implementation boundaries:
 
 - Evidence citation: capture each Claim's supporting quote and source locator as fields on the Claim and Evidence schema. Do not rely on a model provider's native citation feature that is incompatible with constrained structured output; a schema field is provider-neutral and always available.
-- Model routing: a higher-capability model for reasoning, scoring, and memo synthesis, and a cheaper fast model for high-volume dedup, tagging, and enrichment. The specific providers remain the gate's decision.
+- Model routing: GPT-5.6 Luna is the selected optional structured-analysis model. High-volume dedup, tagging, filtering, and scoring remain deterministic in P0; adding a cheaper secondary model requires a later decision.
 - Reasoning trace: capture a step-level execution and evidence audit trail (inputs, sources, rule outcomes, accepted structured outputs, and versions) for the traceability requirement, without private chain-of-thought.
 - Entity resolution: match on deterministic stable keys (domain, developer handle or organization, verified profile, registry identifier) plus a fuzzy fallback, and treat cross-source OSINT agreement as additional match Evidence under the reversible identity-resolution policy.
 
@@ -498,10 +518,10 @@ Recommendations for the model, orchestration, and evidence implementation, recor
 - **False precision in Founder or Trust Scores** → Display factors, version, coverage, qualitative uncertainty, and snapshots; show numerical intervals only after calibration.
 - **Hallucinated provenance** → Only ingested Source Artifacts can anchor Evidence; reject unsupported generated Claims.
 - **Generic-provider cost, latency, or failure** → Select against the labeled corpus, enforce budgets, cache by normalized request/source version, use bounded retries, record partial failure, and keep fake/source-specific adapters.
-- **Framework lock-in delays the hackathon** → Complete domain, ingestion, deterministic rules, and fakes first; require the explicit human gate before any framework dependency.
+- **Framework lock-in delays the hackathon** → Confine LangGraph to the thin outbound control loop and test every provider port, validator, scoring rule, and deterministic fallback without it.
 - **“Memory” ambiguity contaminates source truth** → Keep canonical Memory authoritative and temporary orchestration state disposable.
 - **Founder-presentation analysis encodes bias** → Limit it to claim clarity and Evidence consistency; prohibit appearance, polish, protected traits, and proxies.
-- **Neumorphism harms accessibility or density** → Use it only for progressive grouping; require borders, focus, contrast, semantic HTML, non-color states, and forced-colors behavior.
+- **Neumorphism harms accessibility or density** → Keep normal styling borderless but selective; require labels, tonal/shape affordances, high-contrast focus outlines, semantic HTML, non-color states, real-browser reflow checks, and system-color boundaries in forced-colors mode.
 - **Private decks or provider credentials leak** → Validate uploads, protect file routes, classify data before external transfer, keep secrets server-side, and redact telemetry.
 - **A recommendation is mistaken for autonomous investment** → Keep Recommendation and human Decision distinct in domain, API, and UX; exclude fund transfer entirely.
 - **SQLite or a single process limits scale** → Acceptable for a hackathon MVP; keep domain interfaces and immutable records portable while avoiding premature distributed infrastructure.
@@ -514,24 +534,25 @@ This is a greenfield change, so migration means staged construction rather than 
 1. Scaffold the backend and verify an empty FastAPI service through `uv`.
 2. Review and commit the OpenSpec artifacts, schema shapes/version identifiers, deterministic fixtures, and shared contract tests through the team's normal user-approved Git workflow.
 3. Create `work/swe-platform` from the shared `main` commit; the SWE works there while the Data/ML owner uses the strictly owned paths on `main`, and both lanes build against deterministic fakes before meeting again at I1.
-4. Preflight and benchmark Tavily and Exa through the provider-neutral interface where access exists; mark unavailable candidates `not_live_tested`, stop for the human provider decision, and add at most one approved generic runtime adapter.
+4. Preserve the provider-neutral benchmark record, then implement the human-selected Tavily adapter with the recorded budgets and public-source policy; keep Exa out of the P0 runtime.
 5. In parallel, add local persistence/deck intake/API/UX and sourcing corpus/thesis rules/query planning/Assessment fakes; integrate Mistral OCR through the provider-neutral extractor using fictional inputs until private-deck controls are explicitly enabled.
 6. Integrate the selected provider and source-specific verification at checkpoint I2.
-7. Stop at the human framework-selection gate.
-8. After approval, add model-backed logical analyses, validation, memo synthesis, and tracing.
-9. Complete checkpoints I3/I4 and run contract, seeded-contradiction, cold-start, accessibility, founder-status, and timing demonstrations.
+7. Complete the plain-Python deterministic logical analyses, validation, memo synthesis, and evidence/run tracing; enable the selected GPT-5.6 Luna adapter only through explicit bounded runtime configuration and preserve deterministic fallback.
+8. Complete checkpoints I3/I4 and run contract, seeded-contradiction, cold-start, accessibility, founder-status, and timing demonstrations.
 
 Each stage remains runnable with deterministic fixtures. External adapters and model-backed analysis can be disabled to fall back to the last deterministic state. Schema and score revisions are append-only, so rollback selects an earlier version rather than rewriting history.
 
-## Open Questions
+## Recorded P0 Gate Decisions
 
-1. **Orchestration resolved (no bake-off); investment-intelligence model provider still to pin:** Orchestration for P0 is plain Python with a single model-provider SDK; no LangGraph, LangChain, or LlamaIndex is adopted, and the orchestration seam is preserved so a framework can be added later if a concrete need appears. The specific investment-intelligence model provider is pinned when credentials are set and does not change the framework-neutral contracts; the ingestion-only Mistral OCR selection does not answer this.
-2. Which frontend technology best fits the team and hackathon deadline while satisfying the UX specification?
-3. **Resolved:** No generic web-discovery provider (Tavily or Exa) is adopted for P0. Sourcing anchors on free source-specific adapters behind the provider-neutral seam, which is built for later expansion to a generic provider without changing domain contracts. A two-provider runtime belongs in a later change.
-4. Which direct/source-specific outbound connector should serve as or complement the live discovery path? GitHub is the leading candidate because it can verify developer activity at the source.
-5. What numeric rubric and calibration set should define Founder Score and Claim Trust Score factors without presenting false precision?
-6. Which source domains, provider budget, refresh cadence, and retention policy are approved for the demonstration?
-7. What minimal follow-up information, if any, is genuinely required after company name plus deck to reach decision readiness confidently?
+- **Orchestration and structured intelligence:** The human reviewer selected a thin LangGraph `StateGraph` only for bounded outbound retrieval and OpenAI `gpt-5.6-luna` for optional structured sourcing extraction and model-backed analysis. Public sourcing uses strict Responses API Structured Outputs, server-side credentials, `store=false`, deterministic Pydantic/provenance validation, explicit Unknowns, bounded failure, and deterministic fallback. Inbound specialist ports and scoring stay framework-neutral; no framework receives autonomous activation, outreach, Decision, or fund-transfer authority.
+- **Generic web discovery:** The human reviewer superseded the earlier no-provider decision on 2026-07-19 and selected Tavily as the single P0 generic provider. It remains behind `DiscoveryPort`/`AcquisitionPort`, disabled unless explicitly enabled with a server-side key, bounded to public Search/Extract, and prohibited from turning snippets or relevance scores into Evidence. Exa and any second generic provider remain outside P0.
+- **Frontend:** P0 uses React 19, TypeScript/TSX, Vite, and Ant Design v6. Ant theme/component tokens provide the rice-paper/celadon/ink palette and remove normal component borders. Selective paired/inset shadow depth supports hierarchy but never replaces labels, focus outlines, shape/fill affordances, or non-color state. Founder intake/status uses a separate focused shell and is absent from investor primary navigation.
+
+## Remaining Open Questions
+
+1. What calibration corpus and acceptance thresholds should promote `claim-trust-rubric.v0`, `founder-score-rubric.v0`, and `axis-rubric.v0` from provisional demonstration outputs to decision-grade use without false precision?
+2. Which narrower source allowlist, refresh cadence, and retention/deletion period should replace the conservative P0 defaults after the demonstration?
+3. What minimal follow-up information, if any, is genuinely required after company name plus deck to reach decision readiness confidently?
 
 ## Deferred Follow-up Backlog
 

@@ -107,15 +107,16 @@ def test_discover_maps_stories_to_leads() -> None:
     assert [lead.rank for lead in result.leads] == [1, 2]
 
     first = result.leads[0]
-    assert first.original_url == "https://www.getdropbox.com/u/2/screencast.html"
+    assert first.original_url == "https://news.ycombinator.com/user?id=pg"
     assert first.source_category is SourceCategory.PUBLIC_SOCIAL
     assert first.discovered_at == FIXED_TIME
     assert first.lead_id == "hackernews-story-8863"
     assert first.provider_summary.state is KnowledgeState.UNKNOWN
     assert first.retrieval_relevance.value == 104.0
 
-    # A story with no url falls back to its Hacker News item permalink.
-    assert result.leads[1].original_url == "https://news.ycombinator.com/item?id=121003"
+    # Story search is only a discovery signal; acquisition targets the explicit
+    # public author profile and never treats the linked story as founder identity.
+    assert result.leads[1].original_url == "https://news.ycombinator.com/user?id=tel"
 
     assert result.usage.cost_amount.value == 0.0
     assert result.usage.result_count == 2

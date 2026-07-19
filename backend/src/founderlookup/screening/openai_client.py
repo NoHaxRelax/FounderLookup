@@ -20,8 +20,8 @@ The wrapper exposes exactly two capabilities:
 
 Verified against the installed openai 2.46.0 by introspection (no network):
 ``AsyncOpenAI().responses.parse`` is an async method accepting ``model``, ``reasoning``,
-``instructions``, ``input`` (a plain ``str`` is accepted), and ``text_format`` (a plain
-pydantic ``BaseModel`` subclass), and returns a ``ParsedResponse[T]`` whose
+``instructions``, ``input`` (a plain ``str`` is accepted), ``store``, and ``text_format``
+(a plain pydantic ``BaseModel`` subclass), and returns a ``ParsedResponse[T]`` whose
 ``output_parsed`` property yields ``T | None`` (``None`` on a refusal or an unparseable
 response). ``openai.OpenAIError`` is the base exception and covers the parse-time
 ``LengthFinishReasonError``.
@@ -130,6 +130,7 @@ class OpenAIReasoner:
                 reasoning=Reasoning(effort=self._effort),
                 instructions=instructions,
                 input=content,
+                store=False,
                 text_format=schema,
             )
         except openai.OpenAIError as error:
