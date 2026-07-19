@@ -77,3 +77,23 @@ Notes (logged, not blockers): the band is a dispersion interval, not a standard-
 confidence interval (documented in-module); product-form confidence hits exactly 0 when
 any single channel zeroes, meaning "declined / low support" not "certainly wrong"; the
 bias check is threshold-only, a v1 could compare the shift against pooled spread. No NEEDS ELIAS.
+
+## 2026-07-19, cycle 5 (parallel with cycle 4)
+Task 3.10: builder-signal vs fundability reads. Launched as a SECOND workflow running
+concurrently with cycle 4 on disjoint files (Elias asked what else could run alongside),
+integrated separately with scoped then full gating so the two never collided.
+`screening/founder_reads.py`: two evidence-graded reads over the frozen trait taxonomy,
+versioned (`founder-reads.v0`). builder_signal_read counts only costly-to-fake /
+peer-validated / outcome-linked substance (vanity hard-zeroed via registry max_weight);
+fundability_read models conventional VC pattern-matching (pedigree, presentation,
+audience, team) and under-weights deep craft a VC never inspects; the two zero-sets are
+mirror images, which is what lets the reads diverge in both directions. An A/B/C grade
+ladder (1.0/0.6/0.3) is a real anti-gaming ceiling: pure self-assertion caps at 70.4,
+below STRONG. builder_fundability_gap surfaces the signed gap + a label
+(under_networked_strong_builder / substance_light_but_fundable / aligned), never blended.
+Adversarial verify caught the gap rationale overclaiming "substance-light" when substance
+is actually unrated (50) or moderate; I applied the fix (gate the wording on the builder
+level) and added two honesty regression tests. 30 tests; full suite 196 green. Commit 7b40625.
+Note: grade monotonicity is defined on magnitude (the negative factor subtracts more at a
+stronger grade); a reviewer wanting signed monotonicity would keep negatives in the
+Founder Score only. No NEEDS ELIAS.
