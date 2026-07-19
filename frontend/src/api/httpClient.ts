@@ -24,7 +24,6 @@ import type {
   ExecutableQueryPlan,
   FounderLookupClient,
   FounderStatusView,
-  InvestorAccessController,
   OpportunityDetail,
   OpportunityCommandResult,
   OutreachInput,
@@ -55,13 +54,9 @@ import type {
   WireRunAccepted,
 } from './wireTypes'
 
-type CredentialProvider = () => string | undefined | Promise<string | undefined>
-
 export interface HttpClientOptions {
   /** Full versioned base, for example `http://localhost:8000/api/v1`. */
   baseUrl: string
-  getInvestorCredential?: CredentialProvider
-  investorAccess?: InvestorAccessController
   fetchImplementation?: typeof fetch
   createId?: () => string
   now?: () => Date
@@ -113,9 +108,7 @@ export class QueryPlanUnavailableError extends Error {
  */
 export class HttpFounderLookupClient implements FounderLookupClient {
   readonly runtime = 'http' as const
-  readonly investorAccess?: InvestorAccessController
   readonly #baseUrl: string
-  readonly #getInvestorCredential?: CredentialProvider
   readonly #fetch: typeof fetch
   readonly #createId: () => string
   readonly #now: () => Date
@@ -127,9 +120,6 @@ export class HttpFounderLookupClient implements FounderLookupClient {
 
   constructor(options: HttpClientOptions) {
     this.#baseUrl = options.baseUrl.replace(/\/$/, '')
-    this.investorAccess = options.investorAccess
-    this.#getInvestorCredential =
-      options.getInvestorCredential ?? (() => options.investorAccess?.getCredential())
     this.#fetch = options.fetchImplementation ?? globalThis.fetch.bind(globalThis)
     this.#createId = options.createId ?? (() => globalThis.crypto.randomUUID())
     this.#now = options.now ?? (() => new Date())
@@ -291,7 +281,6 @@ export class HttpFounderLookupClient implements FounderLookupClient {
         headers: { 'Idempotency-Key': input.idempotencyKey },
         body: form,
       },
-      false,
     )
     return mapApplicationReceipt(wire)
   }
@@ -300,7 +289,6 @@ export class HttpFounderLookupClient implements FounderLookupClient {
     const wire = await this.#request<WireFounderStatusView>(
       '/founder-status',
       { headers: { 'X-Founder-Status-Capability': capability } },
-      false,
     )
     return mapFounderStatus(wire)
   }
@@ -457,14 +445,9 @@ export class HttpFounderLookupClient implements FounderLookupClient {
     }
   }
 
-  async #request<T>(path: string, init: RequestInit = {}, investorOnly = true): Promise<T> {
+  async #request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers)
     headers.set('Accept', 'application/json')
-
-    if (investorOnly) {
-      const credential = await this.#getInvestorCredential?.()
-      if (credential) headers.set('Authorization', `Bearer ${credential}`)
-    }
 
     const response = await this.#fetch(`${this.#baseUrl}${path}`, { ...init, headers })
     if (!response.ok) {

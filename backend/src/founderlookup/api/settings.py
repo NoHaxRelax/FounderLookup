@@ -37,7 +37,6 @@ class APISettings(BaseSettings):
     )
     log_level: str = Field(default="INFO", validation_alias="FOUNDERLOOKUP_LOG_LEVEL")
     data_dir: Path = Path(".data")
-    investor_api_key: SecretStr | None = None
     founder_status_pepper: SecretStr | None = None
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     intake_rate_limit: int = Field(default=10, gt=0, le=10_000)
@@ -254,13 +253,6 @@ class APISettings(BaseSettings):
     @cached_property
     def public_pdf_excluded_domain_list(self) -> tuple[str, ...]:
         return tuple(item for item in self.public_pdf_excluded_domains.split(",") if item)
-
-    def resolved_investor_token(self) -> str:
-        """Missing configuration becomes an inaccessible ephemeral credential."""
-
-        if self.investor_api_key is not None:
-            return self.investor_api_key.get_secret_value()
-        return secrets.token_urlsafe(48)
 
     def resolved_status_pepper(self) -> bytes:
         if self.founder_status_pepper is not None:

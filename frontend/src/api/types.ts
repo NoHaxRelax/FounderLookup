@@ -601,20 +601,8 @@ export interface ApiProblem {
   fields?: Array<{ field: string; code: string; message: string }>
 }
 
-/**
- * Session-scoped access to protected investor resources. Implementations must never source the
- * credential from a Vite-exposed environment variable or serialize it into application data.
- */
-export interface InvestorAccessController {
-  hasCredential(): boolean
-  setCredential(credential: string): void
-  clearCredential(): void
-  getCredential(): string | undefined
-}
-
 export interface FounderLookupClient {
   readonly runtime: 'fixture' | 'http'
-  readonly investorAccess?: InvestorAccessController
   getWorkspace(): Promise<WorkspaceFixture>
   searchOpportunities(input: SearchInput): Promise<SearchResponse>
   saveThesis(criteria: ThesisCriterion[]): Promise<ThesisView>

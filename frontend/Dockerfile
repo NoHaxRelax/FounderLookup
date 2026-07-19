@@ -12,7 +12,6 @@ COPY . .
 # remain in sessionStorage; they are never Docker build arguments or image environment values.
 RUN VITE_DATA_SOURCE=http \
     VITE_API_BASE_URL=/api/v1 \
-    VITE_INVESTOR_AUTH_MODE=session \
     npm run build
 
 FROM nginx:1.27-alpine AS runtime

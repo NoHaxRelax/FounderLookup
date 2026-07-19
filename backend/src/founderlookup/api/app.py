@@ -16,13 +16,11 @@ from fastapi import (
     Query,
     Request,
     Response,
-    Security,
     UploadFile,
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response as FastAPIResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from founderlookup import __version__
@@ -37,11 +35,7 @@ from founderlookup.api.schemas import (
     SourcingRunCommand,
     ThesisDraftRequest,
 )
-from founderlookup.api.security import (
-    FixedWindowRateLimiter,
-    InvestorAuthenticator,
-    InvestorPrincipal,
-)
+from founderlookup.api.security import FixedWindowRateLimiter
 from founderlookup.api.settings import APISettings
 from founderlookup.application.live_screening import LiveScreeningCoordinatorPort
 from founderlookup.application.models import (
@@ -81,6 +75,7 @@ from founderlookup.screening.query_planner import QueryPlannerPort
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
 _MAX_FOUNDERS_JSON_BYTES = 32_768
 _FOUNDER_PROFILES = TypeAdapter(tuple[ApplicationFounderProfile, ...])
+_PUBLIC_INVESTOR_ACTOR_ID = "public-investor"
 _PROBLEM_RESPONSES: dict[int | str, dict[str, object]] = {
     401: {"model": ProblemDetails, "description": "Authentication or capability denied"},
     409: {"model": ProblemDetails, "description": "Command conflicts with current state"},
@@ -114,13 +109,7 @@ def create_app(
         capability_pepper=configured.resolved_status_pepper(),
         max_retry_attempts=configured.maximum_retry_attempts,
     )
-    authenticator = InvestorAuthenticator(configured.resolved_investor_token())
     rate_limiter = FixedWindowRateLimiter(window_seconds=configured.rate_limit_window_seconds)
-    bearer = HTTPBearer(
-        auto_error=False,
-        scheme_name="InvestorBearer",
-        description="Configured single-investor bearer credential for the P0 MVP.",
-    )
 
     application = FastAPI(
         title="FounderLookup VC Brain API",
@@ -139,7 +128,6 @@ def create_app(
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=[
-            "Authorization",
             "Content-Type",
             "Idempotency-Key",
             "X-Founder-Status-Capability",
@@ -162,17 +150,6 @@ def create_app(
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
         return response
-
-    async def require_investor(
-        credentials: Annotated[
-            HTTPAuthorizationCredentials | None,
-            Security(bearer),
-        ],
-    ) -> InvestorPrincipal:
-        authorization = (
-            None if credentials is None else f"{credentials.scheme} {credentials.credentials}"
-        )
-        return authenticator.authenticate(authorization)
 
     def rate_key(request: Request) -> str:
         return request.client.host if request.client is not None else "unknown-client"
@@ -317,7 +294,6 @@ def create_app(
     )
     async def revoke_status_capability(
         application_id: str,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> CapabilityRevokedResponse:
         vc_brain.revoke_founder_status(application_id)
         return CapabilityRevokedResponse()
@@ -330,7 +306,6 @@ def create_app(
         responses=_PROBLEM_RESPONSES,
     )
     async def list_theses(
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> tuple[InvestmentThesisRevision, ...]:
         return vc_brain.thesis_history()
 
@@ -342,7 +317,6 @@ def create_app(
         responses=_PROBLEM_RESPONSES,
     )
     async def active_thesis(
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> InvestmentThesisRevision:
         return vc_brain.active_thesis()
 
@@ -356,9 +330,8 @@ def create_app(
     )
     async def create_thesis(
         command: ThesisDraftRequest,
-        principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> InvestmentThesisRevision:
-        return vc_brain.create_thesis(command.to_domain(), actor_id=principal.principal_id)
+        return vc_brain.create_thesis(command.to_domain(), actor_id=_PUBLIC_INVESTOR_ACTOR_ID)
 
     @application.post(
         "/api/v1/sourcing-runs",
@@ -374,7 +347,6 @@ def create_app(
     async def start_sourcing(
         response: Response,
         background_tasks: BackgroundTasks,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
         command: SourcingRunCommand | None = None,
     ) -> RunAccepted:
         if sourcing_coordinator is None:
@@ -415,7 +387,6 @@ def create_app(
     )
     async def create_query_plan(
         command: QueryPlannerCommand,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> OpportunityQueryPlan:
         if query_planner is None:
             raise APIProblem(
@@ -433,7 +404,6 @@ def create_app(
         responses=_PROBLEM_RESPONSES,
     )
     async def list_candidates(
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         workflow_state: Annotated[OutboundCandidateStatus | None, Query()] = None,
     ) -> CandidateCollection:
@@ -450,7 +420,6 @@ def create_app(
     async def preliminary_assessment(
         candidate_id: str,
         response: Response,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> RunAccepted:
         accepted = vc_brain.start_preliminary_assessment(candidate_id)
         response.headers["Location"] = accepted.status_url
@@ -465,7 +434,6 @@ def create_app(
     )
     async def activate_candidate(
         candidate_id: str,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
         command: ActivationCommand | None = None,
     ) -> OutboundCandidateView:
         return vc_brain.activate_candidate(
@@ -484,13 +452,12 @@ def create_app(
     async def record_outreach(
         candidate_id: str,
         command: OutreachCommand,
-        principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> OutreachRecord:
         return vc_brain.record_outreach(
             candidate_id,
             method=command.method,
             status=command.status,
-            actor_id=principal.principal_id,
+            actor_id=_PUBLIC_INVESTOR_ACTOR_ID,
         )
 
     @application.post(
@@ -502,7 +469,6 @@ def create_app(
     )
     async def query_opportunities(
         command: QueryCommand,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> QueryResult:
         return vc_brain.query_opportunities(command.plan.to_domain())
 
@@ -514,7 +480,6 @@ def create_app(
         responses=_PROBLEM_RESPONSES,
     )
     async def list_opportunities(
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         origin: Annotated[OpportunityOrigin | None, Query()] = None,
         workflow_state: Annotated[ScreeningCaseStatus | None, Query()] = None,
@@ -534,7 +499,6 @@ def create_app(
     )
     async def opportunity_detail(
         opportunity_id: str,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
         expand: Annotated[str | None, Query()] = None,
     ) -> OpportunityDetail:
         requested = set(expand.split(",")) if expand else set()
@@ -562,7 +526,6 @@ def create_app(
         opportunity_id: str,
         response: Response,
         background_tasks: BackgroundTasks,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> RunAccepted:
         if live_screening_coordinator is None:
             accepted = vc_brain.start_screening(opportunity_id)
@@ -583,7 +546,6 @@ def create_app(
     async def record_decision(
         opportunity_id: str,
         command: DecisionCommand,
-        principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> Decision:
         return vc_brain.record_decision(
             opportunity_id,
@@ -592,7 +554,7 @@ def create_app(
             recommendation_id=command.recommendation_id,
             disposition=command.disposition,
             rationale=command.rationale,
-            actor_id=principal.principal_id,
+            actor_id=_PUBLIC_INVESTOR_ACTOR_ID,
         )
 
     @application.get(
@@ -604,7 +566,6 @@ def create_app(
     )
     async def run_status(
         run_id: str,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> PipelineRunView:
         return vc_brain.get_run_view(run_id)
 
@@ -619,7 +580,6 @@ def create_app(
     async def retry_run(
         run_id: str,
         response: Response,
-        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> RunAccepted:
         accepted = vc_brain.retry_run(run_id)
         response.headers["Location"] = accepted.status_url
@@ -634,11 +594,10 @@ def create_app(
     )
     async def read_artifact(
         artifact_id: str,
-        principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> FastAPIResponse:
         content, descriptor = vc_brain.read_artifact(
             artifact_id,
-            principal_id=principal.principal_id,
+            principal_id=_PUBLIC_INVESTOR_ACTOR_ID,
         )
         encoded_name = quote(descriptor.display_name, safe="")
         return FastAPIResponse(

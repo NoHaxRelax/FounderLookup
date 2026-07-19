@@ -3,12 +3,10 @@ export type FrontendDataSource = 'fixture' | 'http'
 export interface DevProxyEnvironment {
   readonly VITE_DATA_SOURCE?: string
   readonly FOUNDERLOOKUP_API_PROXY_TARGET?: string
-  readonly FOUNDERLOOKUP_INVESTOR_API_KEY?: string
 }
 
 export interface HttpDevProxySettings {
   readonly target: string
-  readonly authorization: string
 }
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
@@ -50,13 +48,7 @@ export const resolveHttpDevProxySettings = (
     )
   }
 
-  const investorApiKey = environment.FOUNDERLOOKUP_INVESTOR_API_KEY?.trim()
-  if (!investorApiKey) {
-    throw new Error('HTTP dev mode requires FOUNDERLOOKUP_INVESTOR_API_KEY.')
-  }
-
   return {
     target: target.origin,
-    authorization: `Bearer ${investorApiKey}`,
   }
 }

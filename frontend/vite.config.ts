@@ -20,7 +20,6 @@ export default defineConfig(({ command, isPreview, mode }) => {
         ? {
             '/api': {
               target: httpDevProxy.target,
-              headers: { Authorization: httpDevProxy.authorization },
             },
           }
         : undefined,
