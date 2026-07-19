@@ -97,3 +97,22 @@ level) and added two honesty regression tests. 30 tests; full suite 196 green. C
 Note: grade monotonicity is defined on magnitude (the negative factor subtracts more at a
 stronger grade); a reviewer wanting signed monotonicity would keep negatives in the
 Founder Score only. No NEEDS ELIAS.
+
+## 2026-07-19, cycle 6
+Task 3.4 axis half: the three INDEPENDENT screening axes. `screening/axes.py`,
+deterministic + versioned (`axis-rubric.v0`), producing the frozen FounderAxisAssessment
+/ MarketAxisAssessment / IdeaVsMarketAxisAssessment. One internal AxisPosition computed
+from KnowledgeValue signal reads (only KNOWN readings vote) is mapped to each axis's own
+four-value vocabulary. The fairness rule is asymmetric on purpose: a sufficiency gate
+(>=2 present reads under MEDIUM/HIGH, >=3 under LOW) plus a strict gate that downgrades a
+would-be NEGATIVE under LOW coverage to UNKNOWN, so thin evidence yields UNKNOWN and never
+WEAK/BEAR, while a well-corroborated cold-start positive is still credited. A pole needs a
+clear net lean AND only minor opposition, else MIXED (conflict surfaced, not blended).
+Confidence is an explicit-unknown KnowledgeValue when nothing is assessable; trend needs
+dated history (UNKNOWN, never STABLE, below the floor). No averaging, no aggregate, no
+cross-axis leakage; assemble_independent_axes only bundles. Design-council +
+adversarial-verify workflow; all invariants hold (13,824-case sweeps, cross-axis
+independence proven byte-for-byte). 31 tests; full suite 227 green. Commit cef569c.
+The screening judge now has both halves: numeric rubrics (claim trust + founder score),
+the three axes, builder-vs-fundability, and AR1 confidence. Next: assemble the
+candidate-keyed preliminary Assessment Envelope (3.3). No NEEDS ELIAS.
