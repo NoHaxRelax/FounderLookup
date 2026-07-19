@@ -221,6 +221,7 @@ def _submission(
     media_type: str = "APPLICATION/PDF",
     content: bytes = PDF_BYTES,
     key: str = "request-001",
+    canonical_company_id: str | None = None,
 ) -> IntakeSubmission:
     return IntakeSubmission(
         company_name=company_name,
@@ -228,6 +229,7 @@ def _submission(
         media_type=media_type,
         deck_content=content,
         idempotency_key=key,
+        canonical_company_id=canonical_company_id,
     )
 
 
@@ -361,6 +363,34 @@ def test_idempotency_replays_normalized_request_and_conflicts_on_new_content() -
 
     with pytest.raises(IdempotencyConflictError):
         asyncio.run(service.submit(_submission(content=b"%PDF-1.7\ndifferent deck\n%%EOF\n")))
+    assert store.put_calls == [first.source_artifact_id]
+
+
+def test_server_validated_canonical_company_is_persisted_and_fingerprinted() -> None:
+    repository = _Repository()
+    store = _ArtifactStore()
+    service = _service(repository, store, FakePdfExtractor({}))
+    canonical_company_id = "company:outbound-canonical"
+
+    first = asyncio.run(service.submit(_submission(canonical_company_id=canonical_company_id)))
+    replay = asyncio.run(
+        service.submit(
+            _submission(
+                company_name="acme ai",
+                display_name="renamed.pdf",
+                canonical_company_id=canonical_company_id,
+            )
+        )
+    )
+
+    assert first.company_id == canonical_company_id
+    assert repository.applications[first.application_id].company_id == canonical_company_id
+    assert replay.application_id == first.application_id
+    assert replay.company_id == canonical_company_id
+    assert replay.replayed is True
+
+    with pytest.raises(IdempotencyConflictError):
+        asyncio.run(service.submit(_submission(canonical_company_id=None)))
     assert store.put_calls == [first.source_artifact_id]
 
 

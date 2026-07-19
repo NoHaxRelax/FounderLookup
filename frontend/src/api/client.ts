@@ -5,3 +5,4 @@ export {
   HttpFounderLookupClient,
   QueryPlanUnavailableError,
 } from './httpClient'
+export { createBrowserClient } from './runtimeClient'

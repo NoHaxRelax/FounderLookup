@@ -4,12 +4,20 @@ import type {
   ApplicationReceipt,
   DecisionInput,
   DecisionReceipt,
+  DiscoveryInput,
   FounderLookupClient,
   FounderStatusView,
   OpportunityDetail,
+  OpportunityCommandResult,
+  OutreachInput,
+  OutreachReceipt,
+  PipelineRunView,
   SearchInput,
   SearchResponse,
   StableId,
+  ThesisCriterion,
+  ThesisView,
+  WorkspaceCommandResult,
   WorkspaceFixture,
 } from './types'
 import {
@@ -22,6 +30,18 @@ const pause = (milliseconds = 80) =>
   new Promise<void>((resolve) => globalThis.setTimeout(resolve, milliseconds))
 
 const clone = <T>(value: T): T => structuredClone(value)
+
+const fixtureRun = (id: string, kind: string): PipelineRunView => ({
+  id,
+  kind,
+  status: 'succeeded',
+  queuedAt: '2026-07-18T09:00:00Z',
+  startedAt: '2026-07-18T09:00:01Z',
+  completedAt: '2026-07-18T09:00:02Z',
+  acceptedOutputIds: [],
+  failures: [],
+  attempt: 1,
+})
 
 export class FixtureFounderLookupClient implements FounderLookupClient {
   readonly runtime = 'fixture' as const
@@ -69,12 +89,77 @@ export class FixtureFounderLookupClient implements FounderLookupClient {
     return response
   }
 
+  async saveThesis(criteria: ThesisCriterion[]): Promise<ThesisView> {
+    await pause()
+    return {
+      ...clone(workspaceFixture.thesis),
+      version: 'fixture-thesis-saved-v2',
+      effectiveAt: '2026-07-18T09:08:00Z',
+      criteria: clone(criteria),
+    }
+  }
+
+  async discoverCandidates(input: DiscoveryInput): Promise<WorkspaceCommandResult> {
+    await pause(180)
+    const workspace = clone(workspaceFixture)
+    if (input.query.toLocaleLowerCase().includes('no-result-demo')) {
+      workspace.search.results = []
+      workspace.search.totalConsidered = 0
+    }
+    return {
+      run: fixtureRun('run-fixture-discovery', 'sourcing'),
+      workspace,
+      timedOut: false,
+    }
+  }
+
+  async preliminaryAssessCandidate(candidateId: StableId): Promise<WorkspaceCommandResult> {
+    await pause(160)
+    const workspace = clone(workspaceFixture)
+    workspace.search.results = workspace.search.results.map((candidate) =>
+      candidate.id === candidateId
+        ? {
+            ...candidate,
+            workflowState: 'ready for activation',
+            outboundStatus: 'ready_for_activation',
+            incomplete: false,
+          }
+        : candidate,
+    )
+    return {
+      run: fixtureRun('run-fixture-preliminary', 'screening'),
+      workspace,
+      timedOut: false,
+    }
+  }
+
   async getOpportunity(opportunityId: StableId): Promise<OpportunityDetail> {
     await pause()
     if (opportunityId !== opportunityFixture.id) {
       throw new Error(`Fixture opportunity ${opportunityId} is unavailable.`)
     }
     return clone(opportunityFixture)
+  }
+
+  async screenOpportunity(opportunityId: StableId): Promise<OpportunityCommandResult> {
+    const opportunity = await this.getOpportunity(opportunityId)
+    return {
+      run: fixtureRun('run-fixture-screening', 'screening'),
+      opportunity,
+      timedOut: false,
+    }
+  }
+
+  async retryOpportunityRun(
+    opportunityId: StableId,
+    runId: StableId,
+  ): Promise<OpportunityCommandResult> {
+    const opportunity = await this.getOpportunity(opportunityId)
+    return {
+      run: { ...fixtureRun('run-fixture-retry', 'screening'), retryOfRunId: runId, attempt: 2 },
+      opportunity,
+      timedOut: false,
+    }
   }
 
   async submitApplication(input: ApplicationInput): Promise<ApplicationReceipt> {
@@ -115,6 +200,17 @@ export class FixtureFounderLookupClient implements FounderLookupClient {
       state: 'activated',
       activatedAt: '2026-07-18T09:06:00Z',
       outreachDraft,
+    }
+  }
+
+  async recordOutreach(candidateId: StableId, input: OutreachInput): Promise<OutreachReceipt> {
+    await pause(120)
+    return {
+      outreachId: 'outreach-fixture-human-01',
+      candidateId,
+      method: input.method,
+      status: input.status,
+      occurredAt: '2026-07-18T09:07:00Z',
     }
   }
 

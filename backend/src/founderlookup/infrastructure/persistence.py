@@ -94,12 +94,21 @@ class RecordAlreadyExistsError(PersistenceError):
     """The exact category, record identifier, and version already exist."""
 
 
+class ImmutableRecordConflictError(PersistenceError):
+    """An idempotent append attempted to replace accepted immutable content."""
+
+
 class RecordCategory(StrEnum):
     """Stable persistence namespaces; payloads retain their domain schema version."""
 
     CANONICAL_ENTITY = "canonical_entity"
+    COLLECTION_TELEMETRY = "collection_telemetry"
     SOURCE_ARTIFACT = "source_artifact"
+    OBSERVATION = "observation"
     EVIDENCE = "evidence"
+    CLAIM = "claim"
+    CONTRADICTION = "contradiction"
+    DECK_EVIDENCE_PROJECTION = "deck_evidence_projection"
     FOUNDER_SCORE_SNAPSHOT = "founder_score_snapshot"
     PIPELINE_RUN = "pipeline_run"
     MEMO = "memo"
@@ -300,6 +309,41 @@ class SQLiteTransaction:
             payload_sha256=payload_sha256,
         )
 
+    def append_idempotent(self, record: NewRecord) -> StoredRecord:
+        """Append once or return the byte-equivalent immutable record already accepted."""
+
+        row = self._connection.execute(
+            """
+            SELECT * FROM immutable_records
+            WHERE category = ? AND record_id = ? AND version_id = ?
+            """,
+            (record.category.value, record.record_id, record.version_id),
+        ).fetchone()
+        if row is None:
+            return self.append(record)
+
+        payload_json, payload_sha256 = _json_document(record.payload, field="payload")
+        recorded_at = _utc_text(record.recorded_at, field="recorded_at")
+        if (
+            row["subject_id"] != record.subject_id
+            or row["recorded_at"] != recorded_at
+            or row["payload_sha256"] != payload_sha256
+            or row["payload_json"] != payload_json
+        ):
+            raise ImmutableRecordConflictError(
+                f"{record.category.value}/{record.record_id}/{record.version_id} "
+                "already exists with different immutable content"
+            )
+        return StoredRecord(
+            category=record.category,
+            record_id=record.record_id,
+            version_id=record.version_id,
+            subject_id=record.subject_id,
+            recorded_at=record.recorded_at,
+            payload=_decode_document(payload_json, payload_sha256),
+            payload_sha256=payload_sha256,
+        )
+
     def append_audit(self, event: NewAuditEvent) -> StoredAuditEvent:
         details_json, details_sha256 = _json_document(event.details, field="details")
         try:
@@ -390,6 +434,14 @@ class SQLiteMemory:
     def append_many(self, records: Sequence[NewRecord]) -> tuple[StoredRecord, ...]:
         with self.transaction() as transaction:
             return tuple(transaction.append(record) for record in records)
+
+    def append_many_idempotent(
+        self, records: Sequence[NewRecord]
+    ) -> tuple[StoredRecord, ...]:
+        """Atomically append immutable records, accepting exact deterministic replays."""
+
+        with self.transaction() as transaction:
+            return tuple(transaction.append_idempotent(record) for record in records)
 
     def append_audit(self, event: NewAuditEvent) -> StoredAuditEvent:
         with self.transaction() as transaction:

@@ -11,6 +11,7 @@ class IntakeSubmission(DomainModel):
     media_type: NonBlankStr
     deck_content: bytes
     idempotency_key: NonBlankStr
+    canonical_company_id: StableId | None = None
 
 
 class AcceptedApplication(DomainModel):

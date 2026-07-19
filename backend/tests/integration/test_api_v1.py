@@ -33,7 +33,7 @@ class StubIntakeService:
         self.submissions.append(submission)
         return AcceptedApplication(
             application_id="application01",
-            company_id="company01",
+            company_id=submission.canonical_company_id or "company01",
             run_id="ingestionrun01",
             source_artifact_id="artifact01",
             source_artifact_sha256=hashlib.sha256(submission.deck_content).hexdigest(),
@@ -57,7 +57,7 @@ class ConcurrentStubIntakeService:
         await self._both_arrived.wait()
         return AcceptedApplication(
             application_id="concurrent-application01",
-            company_id="concurrent-company01",
+            company_id=submission.canonical_company_id or "concurrent-company01",
             run_id="concurrent-ingestionrun01",
             source_artifact_id="concurrent-artifact01",
             source_artifact_sha256=hashlib.sha256(submission.deck_content).hexdigest(),
@@ -489,6 +489,155 @@ async def test_activation_preserves_edited_draft_without_recording_contact() -> 
 
 
 @pytest.mark.anyio
+async def test_activated_outbound_application_converges_on_common_screening_api() -> None:
+    service = _service()
+    service.create_thesis(
+        ThesisDraft.model_validate_json(httpx.Response(200, json=_thesis_payload()).content),
+        actor_id="investor",
+    )
+    candidate = service.seed_outbound_candidate(
+        company_name="Ink Robotics",
+        founder_id="founder:ink",
+        source_artifact_ids=("source-artifact-01",),
+    )
+    preliminary = service.start_preliminary_assessment(candidate.outbound_candidate_id)
+    service.activate_candidate(candidate.outbound_candidate_id)
+    intake = StubIntakeService()
+    app = create_app(settings=_settings(), service=service, intake_service=intake)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        accepted = await client.post(
+            "/api/v1/applications",
+            data={
+                "company_name": "Ink Robotics",
+                "outbound_candidate_id": candidate.outbound_candidate_id,
+            },
+            files={"deck": ("ink-deck.pdf", PDF, "application/pdf")},
+            headers={"Idempotency-Key": "outbound-application-attempt-01"},
+        )
+        replay = await client.post(
+            "/api/v1/applications",
+            data={
+                "company_name": "Ink Robotics",
+                "outbound_candidate_id": candidate.outbound_candidate_id,
+            },
+            files={"deck": ("ink-deck.pdf", PDF, "application/pdf")},
+            headers={"Idempotency-Key": "outbound-application-attempt-01"},
+        )
+        candidates = await client.get("/api/v1/outbound-candidates", headers=_auth())
+        opportunities = await client.get("/api/v1/opportunities", headers=_auth())
+        opportunity_id = opportunities.json()["items"][0]["opportunity_id"]
+        before_screening = await client.get(
+            f"/api/v1/opportunities/{opportunity_id}", headers=_auth()
+        )
+        screening = await client.post(
+            f"/api/v1/opportunities/{opportunity_id}/screen", headers=_auth()
+        )
+        screened = await client.get(f"/api/v1/opportunities/{opportunity_id}", headers=_auth())
+
+    assert accepted.status_code == 202
+    assert replay.status_code == 202
+    assert replay.json()["application_id"] == accepted.json()["application_id"]
+    assert replay.json()["replayed"] is True
+    assert len(intake.submissions) == 2
+    assert all(
+        submission.canonical_company_id == candidate.company_id for submission in intake.submissions
+    )
+    candidate_body = candidates.json()["items"][0]
+    assert candidate_body["status"] == "applied"
+    assert candidate_body["application_id"] == accepted.json()["application_id"]
+    assert candidate_body["preliminary_assessment"]["run_id"] == preliminary.run_id
+    opportunity_body = opportunities.json()["items"]
+    assert len(opportunity_body) == 1
+    assert opportunity_body[0]["origin"] == "outbound"
+    assert before_screening.json()["outbound_candidate_id"] == candidate.outbound_candidate_id
+    assert before_screening.json()["company_id"] == candidate.company_id
+    assert before_screening.json()["latest_assessment"] is None
+    assert before_screening.json()["human_decisions"] == []
+    assert before_screening.json()["related_run_ids"] == [
+        preliminary.run_id,
+        accepted.json()["run_id"],
+    ]
+    assert screening.status_code == 202
+    identity = screened.json()["latest_assessment"]["identity"]
+    assert identity["mode"] == "full"
+    assert identity["origin"] == "outbound"
+    assert identity["application_id"] == accepted.json()["application_id"]
+    assert identity["outbound_candidate_id"] == candidate.outbound_candidate_id
+    assert identity["company_id"] == candidate.company_id
+    assert screened.json()["human_decisions"] == []
+
+
+@pytest.mark.anyio
+async def test_outbound_application_gate_is_generic_and_precedes_intake() -> None:
+    service = _service()
+    service.create_thesis(
+        ThesisDraft.model_validate_json(httpx.Response(200, json=_thesis_payload()).content),
+        actor_id="investor",
+    )
+    candidate = service.seed_outbound_candidate(
+        company_name="Not Activated",
+        source_artifact_ids=("source-artifact-not-activated",),
+    )
+    service.start_preliminary_assessment(candidate.outbound_candidate_id)
+    intake = StubIntakeService()
+    app = create_app(settings=_settings(), service=service, intake_service=intake)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        missing = await client.post(
+            "/api/v1/applications",
+            data={
+                "company_name": "Missing",
+                "outbound_candidate_id": "candidate:missing",
+            },
+            files={"deck": ("deck.pdf", PDF, "application/pdf")},
+            headers={"Idempotency-Key": "missing-candidate-attempt"},
+        )
+        not_activated = await client.post(
+            "/api/v1/applications",
+            data={
+                "company_name": "Not Activated",
+                "outbound_candidate_id": candidate.outbound_candidate_id,
+            },
+            files={"deck": ("deck.pdf", PDF, "application/pdf")},
+            headers={"Idempotency-Key": "not-activated-attempt"},
+        )
+
+    assert missing.status_code == not_activated.status_code == 409
+    assert missing.json()["code"] == not_activated.json()["code"]
+    assert missing.json()["title"] == not_activated.json()["title"]
+    assert missing.json()["code"] == "outbound_application_link_unavailable"
+    assert "candidate:missing" not in missing.text
+    assert candidate.outbound_candidate_id not in not_activated.text
+    assert intake.submissions == []
+
+
+@pytest.mark.anyio
+async def test_public_intake_cannot_supply_a_canonical_company_id() -> None:
+    service = _service()
+    intake = StubIntakeService()
+    app = create_app(settings=_settings(), service=service, intake_service=intake)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/applications",
+            data={
+                "company_name": "Direct Inbound",
+                "canonical_company_id": "company:attacker-controlled",
+            },
+            files={"deck": ("deck.pdf", PDF, "application/pdf")},
+            headers={"Idempotency-Key": "direct-inbound-attempt"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["company_id"] == "company01"
+    assert intake.submissions[0].canonical_company_id is None
+    opportunity = service.get_opportunity(service.list_opportunities().items[0].opportunity_id)
+    assert opportunity.origin.value == "inbound"
+    assert opportunity.outbound_candidate_id is None
+
+
+@pytest.mark.anyio
 async def test_screen_decision_and_retry_routes_preserve_immutable_history() -> None:
     service = _service()
     service.create_thesis(
@@ -595,6 +744,7 @@ async def test_openapi_contains_the_complete_minimum_route_surface() -> None:
         "/api/v1/theses",
         "/api/v1/theses/active",
         "/api/v1/sourcing-runs",
+        "/api/v1/query-plans",
         "/api/v1/outbound-candidates",
         "/api/v1/outbound-candidates/{candidate_id}/preliminary-assessment",
         "/api/v1/outbound-candidates/{candidate_id}/activate",
@@ -612,3 +762,18 @@ async def test_openapi_contains_the_complete_minimum_route_surface() -> None:
     assert "InvestorBearer" in schema["components"]["securitySchemes"]
     intake_body = schema["paths"]["/api/v1/applications"]["post"]["requestBody"]
     assert "multipart/form-data" in intake_body["content"]
+
+
+@pytest.mark.anyio
+async def test_query_planning_fails_closed_when_factory_has_no_planner() -> None:
+    app = create_app(settings=_settings(), service=_service())
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/query-plans",
+            json={"raw_query": "technical founder in Berlin"},
+            headers=_auth(),
+        )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "query_planner_unavailable"

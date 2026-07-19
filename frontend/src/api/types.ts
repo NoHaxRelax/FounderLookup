@@ -168,6 +168,29 @@ export type OutboundCandidateStatus =
   | 'applied'
   | 'closed'
 
+export type PublicContactKind = 'website' | 'contact_page' | 'public_email' | 'public_profile' | 'other'
+
+export interface PublicContactRoute {
+  id: StableId
+  kind: PublicContactKind
+  label: string
+  displayValue: string
+  /** Present only for a validated HTTPS URL or a supplied public-email mailto route. */
+  href?: string
+  sourceArtifactId: StableId
+  sourceName: string
+  sourceLocator: string
+  collectedAt?: string
+}
+
+export interface SourcingLoopAudit {
+  status: 'running' | 'stopped' | 'completed' | 'failed'
+  roundsCompleted: number
+  roundLimit?: number
+  stopReason: string
+  runId?: StableId
+}
+
 export interface AxisSummary {
   key: 'founder' | 'market' | 'idea_vs_market'
   label: string
@@ -203,6 +226,8 @@ export interface CandidateSummary {
   recommendation?: RecommendationAction
   outboundStatus?: OutboundCandidateStatus
   activationState?: 'not_activated' | 'activated' | 'contacted'
+  publicContactRoutes?: PublicContactRoute[]
+  sourcingLoopAudit?: SourcingLoopAudit
 }
 
 export interface SearchFilters {
@@ -213,8 +238,10 @@ export interface SearchFilters {
 export interface SearchInput {
   query: string
   filters: SearchFilters
+  /** Fixture provenance only; the HTTP client always requests a fresh server plan. */
   plan: ExecutableQueryPlan
   removedCriterionIds?: StableId[]
+  removedCriterionFields?: QueryCriterionField[]
 }
 
 export interface SearchResponse {
@@ -381,13 +408,26 @@ export interface OpportunityDetail {
   recommendation: RecommendationView
   timeline: TimelineStage[]
   runIds: StableId[]
+  pipelineRuns: PipelineRunView[]
   decisionReadyForCommand: boolean
+  publicContactRoutes?: PublicContactRoute[]
+  sourcingLoopAudit?: SourcingLoopAudit
 }
 
+export type ThesisCriterionKey =
+  | 'sector'
+  | 'stage'
+  | 'geography'
+  | 'check_size'
+  | 'ownership_target'
+  | 'risk_appetite'
+
 export interface ThesisCriterion {
-  key: string
+  key: ThesisCriterionKey
   label: string
   value: string
+  operator: QueryOperator | null
+  values: ScalarValue[]
   mode: CriterionMode
   unknownPolicy: UnknownPolicy
 }
@@ -409,6 +449,8 @@ export interface ApplicationInput {
   companyName: string
   deck: File
   idempotencyKey: string
+  /** Links an application to an already-known outbound candidate when the founder used that path. */
+  outboundCandidateId?: StableId
 }
 
 export interface ApplicationReceipt {
@@ -445,6 +487,71 @@ export interface ActivationReceipt {
   outreachDraft: string
 }
 
+export type PipelineRunStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'partially_succeeded'
+  | 'failed'
+
+export interface PipelineFailureView {
+  id: StableId
+  stageKey: string
+  code: string
+  message: string
+  retryable: boolean
+  occurredAt: string
+}
+
+export interface PipelineRunView {
+  id: StableId
+  kind: string
+  status: PipelineRunStatus
+  queuedAt: string
+  startedAt?: string
+  completedAt?: string
+  acceptedOutputIds: StableId[]
+  failures: PipelineFailureView[]
+  retryOfRunId?: StableId
+  attempt: number
+  loopAudit?: SourcingLoopAudit
+}
+
+export interface DiscoveryInput {
+  query: string
+  sourceCategories?: string[]
+  allowedDomains?: string[]
+  excludedDomains?: string[]
+}
+
+export interface WorkspaceCommandResult {
+  run: PipelineRunView
+  workspace: WorkspaceFixture
+  timedOut: boolean
+}
+
+export interface OpportunityCommandResult {
+  run: PipelineRunView
+  opportunity: OpportunityDetail
+  timedOut: boolean
+}
+
+export type OutreachMethod = 'email' | 'linkedin' | 'introduction' | 'other'
+
+export interface OutreachInput {
+  method: OutreachMethod
+  status: string
+}
+
+export interface OutreachReceipt {
+  outreachId: StableId
+  candidateId: StableId
+  method: OutreachMethod
+  status: string
+  actorId?: StableId
+  occurredAt: string
+}
+
 export type DecisionDisposition =
   | 'advance'
   | 'decline'
@@ -478,13 +585,34 @@ export interface ApiProblem {
   fields?: Array<{ field: string; code: string; message: string }>
 }
 
+/**
+ * Session-scoped access to protected investor resources. Implementations must never source the
+ * credential from a Vite-exposed environment variable or serialize it into application data.
+ */
+export interface InvestorAccessController {
+  hasCredential(): boolean
+  setCredential(credential: string): void
+  clearCredential(): void
+  getCredential(): string | undefined
+}
+
 export interface FounderLookupClient {
   readonly runtime: 'fixture' | 'http'
+  readonly investorAccess?: InvestorAccessController
   getWorkspace(): Promise<WorkspaceFixture>
   searchOpportunities(input: SearchInput): Promise<SearchResponse>
+  saveThesis(criteria: ThesisCriterion[]): Promise<ThesisView>
+  discoverCandidates(input: DiscoveryInput): Promise<WorkspaceCommandResult>
+  preliminaryAssessCandidate(candidateId: StableId): Promise<WorkspaceCommandResult>
   getOpportunity(opportunityId: StableId): Promise<OpportunityDetail>
+  screenOpportunity(opportunityId: StableId): Promise<OpportunityCommandResult>
+  retryOpportunityRun(
+    opportunityId: StableId,
+    runId: StableId,
+  ): Promise<OpportunityCommandResult>
   submitApplication(input: ApplicationInput): Promise<ApplicationReceipt>
   getFounderStatus(capability: string): Promise<FounderStatusView>
   activateCandidate(candidateId: StableId, outreachDraft: string): Promise<ActivationReceipt>
+  recordOutreach(candidateId: StableId, input: OutreachInput): Promise<OutreachReceipt>
   recordDecision(input: DecisionInput): Promise<DecisionReceipt>
 }

@@ -162,6 +162,7 @@ class OutboundCandidateView(DomainModel):
     discovered_at: UTCDateTime
     source_artifact_ids: tuple[StableId, ...] = ()
     preliminary_assessment: AssessmentEnvelope | None = None
+    application_id: StableId | None = None
     outreach_draft: NonBlankStr | None = None
     updated_at: UTCDateTime
 

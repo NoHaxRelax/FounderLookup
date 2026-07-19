@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { searchFixture } from '../fixtures/vcBrainFixture'
+import { mapOutboundCandidate, serializeExecutablePlan } from './contractAdapter'
 import {
   FounderLookupApiError,
   HttpFounderLookupClient,
@@ -60,6 +61,38 @@ const outboundCandidateWire: WireOutboundCandidate = {
   preliminary_assessment: null,
   outreach_draft: 'Edited human-reviewed draft.',
   updated_at: NOW,
+  public_contact_routes: [
+    {
+      route_id: 'route-public-website',
+      kind: 'contact_url',
+      label: 'Company contact page',
+      value: 'https://jade.example',
+      href: 'https://jade.example/contact',
+      classification: 'public',
+      source_artifact_id: 'artifact-public-1',
+      source_name: 'Public launch page',
+      source_locator: 'Contact link',
+      collected_at: NOW,
+    },
+    {
+      route_id: 'route-private-email',
+      kind: 'public_email',
+      label: 'Deck email',
+      value: 'private@jade.example',
+      href: 'mailto:private@jade.example',
+      classification: 'founder_private',
+      source_artifact_id: 'artifact-private-1',
+      source_name: 'Founder deck',
+      source_locator: 'Page 1',
+    },
+  ],
+  sourcing_audit: {
+    status: 'stopped',
+    rounds_completed: 2,
+    round_limit: 3,
+    stop_reason: 'Authoritative sources satisfied the bounded plan.',
+    run_id: 'run-sourcing-1',
+  },
 }
 
 const makeClient = (
@@ -76,6 +109,30 @@ const makeClient = (
   })
 
 describe('HttpFounderLookupClient /api/v1 boundary', () => {
+  it('maps only supplied public contact routes and preserves sourcing-loop provenance', () => {
+    const candidate = mapOutboundCandidate(outboundCandidateWire)
+
+    expect(candidate.publicContactRoutes).toEqual([
+      expect.objectContaining({
+        id: 'route-public-website',
+        kind: 'contact_page',
+        href: 'https://jade.example/contact',
+        sourceArtifactId: 'artifact-public-1',
+        sourceLocator: 'Contact link',
+      }),
+    ])
+    expect(candidate.publicContactRoutes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'route-private-email' })]),
+    )
+    expect(candidate.sourcingLoopAudit).toEqual({
+      status: 'stopped',
+      roundsCompleted: 2,
+      roundLimit: 3,
+      stopReason: 'Authoritative sources satisfied the bounded plan.',
+      runId: 'run-sourcing-1',
+    })
+  })
+
   it('keeps the founder capability out of the URL and sends it only in the status header', async () => {
     const capability = 'founder-secret/capability'
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -236,7 +293,16 @@ describe('HttpFounderLookupClient /api/v1 boundary', () => {
   })
 
   it('executes a validated typed Query Plan at /queries instead of a fictional search route', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/query-plans')) {
+        return jsonResponse(
+          serializeExecutablePlan({
+            ...searchFixture.plan.execution,
+            rawQuery: 'fresh server interpretation',
+          }),
+        )
+      }
       const request = JSON.parse(String(init?.body)) as { plan: Record<string, unknown> }
       return jsonResponse({
         plan: request.plan,
@@ -256,12 +322,20 @@ describe('HttpFounderLookupClient /api/v1 boundary', () => {
       plan: searchFixture.plan.execution,
     })
 
-    const [url, init] = fetchMock.mock.calls[0]!
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [planUrl, planInit] = fetchMock.mock.calls[0]!
+    expect(String(planUrl)).toBe(`${API_BASE}/query-plans`)
+    expect(JSON.parse(String(planInit?.body))).toMatchObject({ raw_query: inputQuery })
+    const [url, init] = fetchMock.mock.calls[1]!
     expect(String(url)).toBe(`${API_BASE}/queries`)
     expect(String(url)).not.toContain('searches')
     const body = JSON.parse(String(init?.body)) as { plan: Record<string, unknown> }
     expect(body).toHaveProperty('plan.query_plan_id')
-    expect(body).toHaveProperty('plan.query_plan_version_id', 'query-version-fixed-id')
+    expect(body).toHaveProperty('plan.query_plan_version_id', 'query-version-ui-fixed-id')
+    expect(body).toHaveProperty(
+      'plan.supersedes_query_plan_version_id',
+      searchFixture.plan.execution.queryPlanVersionId,
+    )
     expect(body).toHaveProperty('plan.raw_query', inputQuery)
     expect(body).toHaveProperty('plan.state', 'validated')
     expect(body.plan).not.toHaveProperty('queryPlanId')

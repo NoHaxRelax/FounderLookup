@@ -1,87 +1,155 @@
 # FounderLookup frontend
 
-React + TypeScript + Vite starter for the four P0 demo surfaces:
+The React + TypeScript investor workspace and public founder intake for the FounderLookup MVP.
+It is built around a strict sequence: **Act → Understand → Audit**. The first layer exposes the
+next safe action, the second explains the system Recommendation, and the third opens Claims,
+Trust, Evidence, run history, and cited memo detail.
 
-- founder Application intake and bounded founder status;
-- thesis, compound sourcing, candidate activation, and outreach intent;
-- Opportunity detail with independent axes, Claims, Trust, Evidence, and contradictions;
-- cited memo, Recommendation, and explicit human Decision.
+The default route is a compact public landing page with exactly two paths:
 
-The app starts in deterministic fixture mode, so frontend work does not depend on a live
-provider, investment-intelligence model, or orchestration framework. All data access crosses the
-typed `FounderLookupClient` interface in `src/api/`. Fixture interpretation is demo data; it is not
-presented as a backend model result.
+- **Investor workspace** — sourcing, Opportunity review, cited memo, and explicit human Decision.
+- **Founder application** — public minimum intake and a capability-scoped private status view.
 
-The founder intake intentionally requires only company name and a PDF deck (10 MiB maximum,
-matching the backend default). Its idempotency key is retained across retries of the same payload,
-and submission errors preserve form state. Candidate activation is outbound-only and records the
-human-edited outreach draft without sending it.
+The founder shell never renders investor navigation or requests investor workspace data. A
+Recommendation remains advisory; only a confirmed human Decision is persisted, and no UI action
+moves funds.
 
-## Run and verify
+## Run the live-demo fixture
+
+Fixture mode is deterministic and needs no backend, credentials, OCR, or network access.
 
 ```bash
-npm install
+cd frontend
+npm ci
 npm run dev
+```
+
+Open <http://localhost:5173>. Useful routes are:
+
+- `#/` — public landing page;
+- `#/sourcing` — compound sourcing and candidate queue;
+- `#/opportunity/<opportunity-id>` — assessment, independent axes, and Evidence;
+- `#/memo/<opportunity-id>` — cited memo and explicit Decision;
+- `#/apply` — public founder intake;
+- `#/apply/status/<capability>` — bounded private founder status.
+
+Fixture-only state controls cover loading, empty, error, and blocked demonstrations. They do not
+appear in the public founder shell or the HTTP production runtime.
+
+## Run against the local API
+
+Start FastAPI from the repository root in one terminal:
+
+```bash
+cd backend
+uv sync --frozen
+uv run uvicorn founderlookup.main:app --reload
+```
+
+Then configure and start the frontend:
+
+```bash
+cd frontend
+cp .env.example .env.local
+npm ci
+npm run dev
+```
+
+Set these values in `.env.local`:
+
+```dotenv
+VITE_DATA_SOURCE=http
+VITE_API_BASE_URL=/api/v1
+VITE_INVESTOR_AUTH_MODE=proxy
+FOUNDERLOOKUP_API_PROXY_TARGET=http://127.0.0.1:8000
+FOUNDERLOOKUP_INVESTOR_API_KEY=<same value as backend/.env>
+```
+
+In local `proxy` mode, the browser calls same-origin `/api/v1`. Vite forwards `/api` to the
+loopback FastAPI origin and injects the bearer credential server-side. The credential has no
+`VITE_` prefix and is never embedded in browser assets. The development proxy rejects remote
+targets so a local credential cannot be forwarded accidentally.
+
+## Investor access model
+
+The MVP intentionally has one investor credential—no accounts, OAuth, or role model. Production
+uses `VITE_INVESTOR_AUTH_MODE=session`: the investor enters the key after the page loads, it is
+kept in `sessionStorage` with an in-memory fallback, and it is attached only to investor API calls
+as `Authorization: Bearer …`. Locking the workspace or closing the tab clears its useful lifetime.
+Remote direct API origins must use HTTPS; the Railway image instead keeps calls same-origin and
+proxies them over HTTPS.
+
+Founder application and status calls never receive the investor Authorization header. The founder
+status capability stays in the URL fragment for client routing and is sent to FastAPI only through
+`X-Founder-Status-Capability`.
+
+## Railway deployment
+
+The production `Dockerfile` builds the browser bundle and serves it with Nginx. Its public build
+choices are fixed to HTTP data, `/api/v1`, and session investor access. No credential is a Docker
+argument or image environment variable.
+
+Create a Railway service with `frontend/` as its root and the Dockerfile builder, then set:
+
+```dotenv
+BACKEND_URL=https://<backend-service-domain>
+```
+
+Railway supplies `PORT`; the image defaults to `8080` outside Railway. `BACKEND_URL` must be an
+origin with no `/api` suffix because Nginx preserves the incoming `/api/v1/...` path. The service
+provides `GET /healthz`, SPA fallback routing, long-lived content-hashed asset caching, an 11 MiB upload ceiling,
+security headers, and same-origin `/api/` proxying. The browser-facing Railway domain must use
+HTTPS before an investor key is entered.
+
+Local image smoke test:
+
+```bash
+docker build -t founderlookup-frontend .
+docker run --rm -p 8080:8080 \
+  -e BACKEND_URL=https://backend-production-1cf3.up.railway.app \
+  founderlookup-frontend
+curl --fail http://127.0.0.1:8080/healthz
+```
+
+## Implemented API actions
+
+| UI operation | FastAPI contract |
+| --- | --- |
+| Initial workspace | `GET /theses/active`, `GET /outbound-candidates?limit=50`, `GET /opportunities?limit=50`, then first Opportunity detail |
+| Save thesis revision | `POST /theses` |
+| Interpret compound query | `POST /query-plans` |
+| Execute validated query | `POST /queries` |
+| Start source discovery | `POST /sourcing-runs` and bounded run polling |
+| Preliminary candidate assessment | `POST /outbound-candidates/{id}/preliminary-assessment` and bounded run polling |
+| Activate outbound candidate | `POST /outbound-candidates/{id}/activate` |
+| Record human-controlled outreach | `POST /outbound-candidates/{id}/outreach` |
+| Opportunity detail | `GET /opportunities/{id}?expand=claims,evidence` and related run reads |
+| Full Screening | `POST /opportunities/{id}/screen` and bounded run polling |
+| Retry failed stage | `POST /runs/{id}/retry` and bounded run polling |
+| Record human Decision | `POST /opportunities/{id}/decisions` |
+| Founder application | public multipart `POST /applications` with `Idempotency-Key` |
+| Founder status | public `GET /founder-status` with `X-Founder-Status-Capability` |
+
+The UI model is camelCase; `src/api/contractAdapter.ts` is the explicit snake_case wire boundary.
+Unknown data remains Unknown rather than being inferred from a missing value.
+
+Outbound candidate and Opportunity detail responses may also supply `public_contact_routes`
+(`contact_routes` is accepted as a compatibility alias) plus `sourcing_audit`/`agent_loop`.
+Only routes explicitly classified `public` are rendered. Every rendered route retains its source
+artifact, source name, locator, and collection timestamp; unsafe or non-HTTPS links remain
+unclickable. The UI never guesses an email address, performs a private lookup, or sends outreach.
+Both `contact_url` and `contact_page` wire kinds map to the same public contact-page presentation.
+When present, bounded sourcing rounds and the stop reason are shown in the Audit layer.
+
+## Verify before a demo
+
+```bash
 npm run typecheck
 npm run lint
 npm test
 npm run build
 ```
 
-`.env.example` records the non-secret local API URL for a host integration. The starter does not
-automatically switch clients from an environment variable: `App` deliberately defaults to the
-fixture client. Never put an investor credential or founder-status capability in a `VITE_*`
-variable because Vite embeds those values in browser assets.
-
-## Backend integration
-
-`src/api/httpClient.ts` targets the implemented FastAPI `/api/v1` surface. Construct
-`HttpFounderLookupClient` with the full versioned base URL (for example,
-`http://localhost:8000/api/v1`) and a runtime investor-credential callback, then inject it into
-`App`. The browser model remains camelCase; `contractAdapter.ts` is the explicit snake_case wire
-boundary.
-
-The HTTP client uses only these implemented operations:
-
-| UI operation | FastAPI contract |
-| --- | --- |
-| Initial investor workspace | compose `GET /theses/active`, `GET /outbound-candidates?limit=50`, and `GET /opportunities?limit=50` |
-| Opportunity detail | `GET /opportunities/{id}?expand=claims,evidence`, then related `GET /runs/{id}` |
-| Typed query execution | `POST /queries` with `{ "plan": <validated QueryPlan> }` |
-| Founder application | public multipart `POST /applications` with `company_name` and `deck` plus `Idempotency-Key` |
-| Founder status | public `GET /founder-status` with `X-Founder-Status-Capability` |
-| Candidate activation | `POST /outbound-candidates/{id}/activate` with `outreach_draft` |
-| Human decision | `POST /opportunities/{id}/decisions` |
-
-The founder capability lives in the URL fragment only for client-side return routing and is sent
-to FastAPI only in the capability header. It is never placed in a query/path, analytics event, or
-log by this starter.
-
-Current backend gaps are exposed rather than papered over:
-
-- FastAPI executes a validated typed Query Plan but has no natural-language-to-plan endpoint.
-  Fixture mode demonstrates interpretation; HTTP mode asks for an already inspectable plan.
-- Opportunity reads omit company/founder display names and Source Artifact classification/name
-  metadata. The adapter labels stable IDs and preserves those fields as Unknown instead of
-  inventing values.
-- There is no `/workspace` aggregate resource, so the HTTP client composes the three real reads.
-- A fresh backend has no active thesis; create the first thesis before HTTP workspace composition
-  can return `GET /theses/active` successfully.
-- The intake contract neither accepts nor stores a contact email, so the UI does not request one.
-
-Keep provider response types and provider secrets behind the backend contract.
-
-## Accessibility baseline
-
-The starter uses semantic landmarks and forms, native `details` and `dialog`, a skip link,
-visible `:focus-visible` outlines, text-plus-icon states, minimum 24 CSS-pixel targets, larger
-coarse-pointer targets, responsive/container layouts, reduced-motion rules, and a forced-colors
-fallback. Neumorphic shadows are decorative: borders, labels, and state text remain when shadows
-disappear.
-
-The palette follows a Tiaohe-style environmental-gray approach: rice-paper and celadon surfaces,
-one consistent colored-shadow light source, and restrained cinnabar/jade saturation for hierarchy.
-
-Before a demo, also check keyboard-only navigation, 320 CSS pixels, 400% zoom, forced colors,
-reduced motion, and contrast in a real browser. Automated tests are useful but do not certify
-WCAG conformance.
+Also check keyboard-only navigation, 320 CSS pixels, 400% zoom, reduced motion, and forced colors
+in a real browser. The Soft UI treatment is decorative: visible focus, semantic labels, text-plus-
+icon states, and forced-color boundaries remain when shadows disappear.

@@ -1,5 +1,12 @@
 import '@testing-library/jest-dom/vitest'
 
+const browserGetComputedStyle = globalThis.getComputedStyle.bind(globalThis)
+
+Object.defineProperty(globalThis, 'getComputedStyle', {
+  configurable: true,
+  value: (element: Element) => browserGetComputedStyle(element),
+})
+
 if (!globalThis.matchMedia) {
   Object.defineProperty(globalThis, 'matchMedia', {
     configurable: true,
@@ -16,17 +23,17 @@ if (!globalThis.matchMedia) {
   })
 }
 
-if (!HTMLDialogElement.prototype.showModal) {
-  HTMLDialogElement.prototype.showModal = function showModal() {
-    this.open = true
+if (!globalThis.ResizeObserver) {
+  class ResizeObserverMock implements ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   }
-}
 
-if (!HTMLDialogElement.prototype.close) {
-  HTMLDialogElement.prototype.close = function close() {
-    this.open = false
-    this.dispatchEvent(new Event('close'))
-  }
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: ResizeObserverMock,
+  })
 }
 
 if (!globalThis.crypto.randomUUID) {

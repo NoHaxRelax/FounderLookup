@@ -18,6 +18,10 @@ from enum import StrEnum
 from threading import RLock
 from typing import Final
 
+from founderlookup.application.deck_evidence import (
+    DeckEvidenceProjection,
+    project_deck_evidence,
+)
 from founderlookup.application.models import (
     ApplicationReceipt,
     CandidateCollection,
@@ -42,6 +46,10 @@ from founderlookup.application.models import (
     ThesisDraft,
 )
 from founderlookup.application.ports import AcceptedApplication, PrivateArtifactReadPort
+from founderlookup.application.screening_bridge import (
+    DeterministicScreeningBridge,
+    DeterministicScreeningProjection,
+)
 from founderlookup.domain.assessment import (
     AssessmentEnvelope,
     Decision,
@@ -76,12 +84,14 @@ from founderlookup.domain.assessment import (
 from founderlookup.domain.common import (
     ComponentVersion,
     EntityKind,
+    KnowledgeState,
     KnowledgeValue,
     ScalarValue,
     SubjectRef,
     VersionComponent,
     VersionManifest,
 )
+from founderlookup.domain.evidence import SourceArtifact, SourceCategory
 from founderlookup.domain.lifecycles import (
     ApplicationStatus,
     DecisionReadinessStatus,
@@ -99,6 +109,7 @@ from founderlookup.domain.runs import (
     PipelineStage,
 )
 from founderlookup.domain.scoring import CoverageLevel, CoverageSummary
+from founderlookup.ingestion.extraction import PdfExtractionResult
 from founderlookup.screening.query_executor import (
     DeterministicQueryExecutor,
     OpportunityQueryRecord,
@@ -131,6 +142,12 @@ class NotFoundError(ApplicationServiceError, LookupError):
 
 class ConflictError(ApplicationServiceError):
     code = "state_conflict"
+
+
+class OutboundApplicationLinkUnavailableError(ConflictError):
+    """Generic public failure for missing, ineligible, or already-used invitations."""
+
+    code = "outbound_application_link_unavailable"
 
 
 class CapabilityDeniedError(ApplicationServiceError, PermissionError):
@@ -176,6 +193,7 @@ class _OpportunityState:
     assessments: list[AssessmentEnvelope] = field(default_factory=list)
     decisions: list[Decision] = field(default_factory=list)
     run_ids: list[str] = field(default_factory=list)
+    deck_evidence_projection: DeckEvidenceProjection | None = None
 
 
 class FakeVCBrainService:
@@ -192,6 +210,7 @@ class FakeVCBrainService:
         artifact_reader: PrivateArtifactReadPort | None = None,
         query_executor: DeterministicQueryExecutor | None = None,
         rule_override_ledger: RuleOverrideLedgerPort | None = None,
+        screening_bridge: DeterministicScreeningBridge | None = None,
     ) -> None:
         if max_retry_attempts < 1:
             raise ValueError("max_retry_attempts must be positive")
@@ -207,13 +226,18 @@ class FakeVCBrainService:
             maximum_results=_MAX_COLLECTION_LIMIT
         )
         self._rule_override_ledger = rule_override_ledger or RuleOverrideLedger()
+        self._screening_bridge = screening_bridge or DeterministicScreeningBridge()
         self._lock = RLock()
         self._theses: list[InvestmentThesisRevision] = []
         self._applications: dict[str, _ApplicationState] = {}
+        self._artifact_descriptors: dict[str, PrivateArtifactDescriptor] = {}
         self._idempotency: dict[str, tuple[str, AcceptedApplication]] = {}
         self._opportunities: dict[str, _OpportunityState] = {}
         self._application_opportunities: dict[str, str] = {}
         self._candidates: dict[str, OutboundCandidateView] = {}
+        self._candidate_applications: dict[str, str] = {}
+        self._application_candidates: dict[str, str] = {}
+        self._candidate_by_source_key: dict[str, str] = {}
         self._outreach: dict[str, list[OutreachRecord]] = {}
         self._runs: dict[str, PipelineRun] = {}
         self._retry_by_parent: dict[str, str] = {}
@@ -331,10 +355,39 @@ class FakeVCBrainService:
         *,
         display_name: str,
         media_type: str,
+        outbound_candidate_id: str | None = None,
     ) -> ApplicationReceipt:
         """Register an accepted provider-neutral intake result and issue status access."""
 
         with self._lock:
+            candidate: OutboundCandidateView | None = None
+            if outbound_candidate_id is not None:
+                candidate = self._validated_outbound_application_candidate(outbound_candidate_id)
+                if accepted.company_id != candidate.company_id:
+                    raise OutboundApplicationLinkUnavailableError(
+                        "outbound Application link is unavailable"
+                    )
+                candidate_application_id = self._candidate_applications.get(outbound_candidate_id)
+                if (
+                    candidate_application_id is not None
+                    and candidate_application_id != accepted.application_id
+                ):
+                    raise OutboundApplicationLinkUnavailableError(
+                        "outbound Application link is unavailable"
+                    )
+                application_candidate_id = self._application_candidates.get(accepted.application_id)
+                if (
+                    application_candidate_id is not None
+                    and application_candidate_id != outbound_candidate_id
+                ):
+                    raise OutboundApplicationLinkUnavailableError(
+                        "outbound Application link is unavailable"
+                    )
+            elif accepted.application_id in self._application_candidates:
+                raise OutboundApplicationLinkUnavailableError(
+                    "outbound Application link is unavailable"
+                )
+
             existing = self._applications.get(accepted.application_id)
             if existing is None:
                 token, capability = self._issue_capability(accepted.application_id)
@@ -358,22 +411,67 @@ class FakeVCBrainService:
                     capability=capability,
                     artifact=artifact,
                 )
+                self._artifact_descriptors[artifact.artifact_id] = artifact
+                candidate_run_ids: tuple[str, ...] = ()
+                if candidate is not None and candidate.preliminary_assessment is not None:
+                    candidate_run_ids = (candidate.preliminary_assessment.run_id,)
                 opportunity = _OpportunityState(
                     opportunity_id=self._id(),
-                    origin=OpportunityOrigin.INBOUND,
+                    origin=(
+                        OpportunityOrigin.OUTBOUND
+                        if candidate is not None
+                        else OpportunityOrigin.INBOUND
+                    ),
                     application_id=accepted.application_id,
                     company_id=accepted.company_id,
                     screening_case_id=self._id(),
-                    founder_id=KnowledgeValue[str].unknown("founder_identity_unresolved"),
-                    started_at=accepted.received_at,
+                    founder_id=(
+                        candidate.founder_id
+                        if candidate is not None
+                        else KnowledgeValue[str].unknown("founder_identity_unresolved")
+                    ),
+                    started_at=(
+                        candidate.discovered_at if candidate is not None else accepted.received_at
+                    ),
                     updated_at=accepted.received_at,
-                    run_ids=[accepted.run_id],
+                    outbound_candidate_id=outbound_candidate_id,
+                    run_ids=list(dict.fromkeys((*candidate_run_ids, accepted.run_id))),
                 )
                 self._opportunities[opportunity.opportunity_id] = opportunity
                 self._application_opportunities[accepted.application_id] = (
                     opportunity.opportunity_id
                 )
+                if candidate is not None and outbound_candidate_id is not None:
+                    self._candidate_applications[outbound_candidate_id] = accepted.application_id
+                    self._application_candidates[accepted.application_id] = outbound_candidate_id
+                    self._candidates[outbound_candidate_id] = candidate.model_copy(
+                        update={
+                            "status": OutboundCandidateStatus.APPLIED,
+                            "application_id": accepted.application_id,
+                            "updated_at": accepted.received_at,
+                        }
+                    )
             else:
+                opportunity_id = self._application_opportunities.get(accepted.application_id)
+                existing_opportunity = (
+                    self._opportunities.get(opportunity_id) if opportunity_id is not None else None
+                )
+                expected_origin = (
+                    OpportunityOrigin.OUTBOUND
+                    if outbound_candidate_id is not None
+                    else OpportunityOrigin.INBOUND
+                )
+                if (
+                    existing_opportunity is None
+                    or existing_opportunity.origin is not expected_origin
+                    or existing_opportunity.outbound_candidate_id != outbound_candidate_id
+                    or existing_opportunity.company_id != accepted.company_id
+                ):
+                    if outbound_candidate_id is not None:
+                        raise OutboundApplicationLinkUnavailableError(
+                            "outbound Application link is unavailable"
+                        )
+                    raise ConflictError("Application origin or canonical Company cannot change")
                 # Recompute the bearer without retaining it. Keeping the original
                 # digest record makes replay concurrency safe and, critically,
                 # preserves an investor's prior revocation.
@@ -411,12 +509,109 @@ class FakeVCBrainService:
                 replayed=accepted.replayed,
             )
 
+    def canonical_company_for_outbound_application(self, candidate_id: str) -> str:
+        """Resolve the canonical Company only after invitation-state validation."""
+
+        with self._lock:
+            return self._validated_outbound_application_candidate(candidate_id).company_id
+
+    def _validated_outbound_application_candidate(
+        self,
+        candidate_id: str,
+    ) -> OutboundCandidateView:
+        candidate = self._candidates.get(candidate_id)
+        if candidate is None:
+            raise OutboundApplicationLinkUnavailableError(
+                "outbound Application link is unavailable"
+            )
+        linked_application_id = self._candidate_applications.get(candidate_id)
+        is_unused_invitation = (
+            candidate.status
+            in {
+                OutboundCandidateStatus.ACTIVATED,
+                OutboundCandidateStatus.CONTACTED,
+            }
+            and linked_application_id is None
+            and candidate.application_id is None
+        )
+        is_replay = (
+            candidate.status is OutboundCandidateStatus.APPLIED
+            and linked_application_id is not None
+            and candidate.application_id == linked_application_id
+        )
+        if not is_unused_invitation and not is_replay:
+            raise OutboundApplicationLinkUnavailableError(
+                "outbound Application link is unavailable"
+            )
+        return candidate
+
+    def project_application_deck(
+        self,
+        application_id: str,
+        *,
+        extraction: PdfExtractionResult,
+        source_artifact: SourceArtifact,
+    ) -> DeckEvidenceProjection:
+        """Build a bounded projection against immutable canonical Application identity."""
+
+        with self._lock:
+            application = self._applications.get(application_id)
+            opportunity_id = self._application_opportunities.get(application_id)
+            opportunity = (
+                self._opportunities.get(opportunity_id) if opportunity_id is not None else None
+            )
+            if application is None or opportunity is None:
+                raise NotFoundError("Application projection context was not found")
+            if (
+                application.accepted.company_id != opportunity.company_id
+                or application.accepted.source_artifact_id
+                != source_artifact.source_artifact_id
+                or application.artifact.content_sha256 != source_artifact.content_sha256
+            ):
+                raise ConflictError("Application projection context does not match accepted intake")
+            company_id = opportunity.company_id
+
+        return project_deck_evidence(
+            extraction=extraction,
+            source_artifact=source_artifact,
+            application_id=application_id,
+            company_id=company_id,
+            opportunity_id=opportunity.opportunity_id,
+        )
+
+    def register_deck_evidence_projection(
+        self,
+        projection: DeckEvidenceProjection,
+    ) -> DeckEvidenceProjection:
+        """Register one accepted immutable projection on the common Opportunity state."""
+
+        with self._lock:
+            application = self._applications.get(projection.application_id)
+            opportunity = self._opportunities.get(projection.opportunity_id)
+            if application is None or opportunity is None:
+                raise NotFoundError("Application projection context was not found")
+            if (
+                opportunity.application_id != projection.application_id
+                or opportunity.company_id != projection.company_id
+                or application.accepted.source_artifact_id != projection.source_artifact_id
+            ):
+                raise ConflictError("deck Evidence projection does not match canonical identity")
+            existing = opportunity.deck_evidence_projection
+            if existing is not None:
+                if existing == projection:
+                    return existing
+                raise ConflictError("accepted deck Evidence projection cannot be replaced")
+            opportunity.deck_evidence_projection = projection
+            opportunity.updated_at = max(opportunity.updated_at, projection.projected_at)
+            return projection
+
     def record_application_extraction_outcome(
         self,
         application_id: str,
         *,
         outcome: ApplicationExtractionOutcome,
         accepted_output_id: str | None = None,
+        additional_output_ids: tuple[str, ...] = (),
         safe_code: str | None = None,
     ) -> PipelineRun:
         """Publish one safe extraction-stage outcome through the observable run."""
@@ -426,11 +621,15 @@ class FakeVCBrainService:
                 raise ValueError("successful extraction requires an accepted output identifier")
             if safe_code is not None:
                 raise ValueError("successful extraction cannot carry a failure code")
+            if any(not item.strip() for item in additional_output_ids):
+                raise ValueError("accepted output identifiers must be non-blank")
         else:
             if safe_code is None or not safe_code.strip():
                 raise ValueError("failed or blocked extraction requires a safe failure code")
             if accepted_output_id is not None:
                 raise ValueError("failed or blocked extraction cannot accept an output")
+            if additional_output_ids:
+                raise ValueError("failed or blocked extraction cannot accept additional outputs")
 
         with self._lock:
             try:
@@ -446,13 +645,16 @@ class FakeVCBrainService:
 
             if outcome is ApplicationExtractionOutcome.SUCCEEDED:
                 assert accepted_output_id is not None  # narrowed by validation above
+                stage_output_ids = tuple(
+                    dict.fromkeys((accepted_output_id, *additional_output_ids))
+                )
                 if run.status is PipelineRunStatus.SUCCEEDED:
-                    if accepted_output_id in run.accepted_output_ids:
+                    if set(stage_output_ids).issubset(run.accepted_output_ids):
                         return run
                     raise ConflictError("accepted extraction output cannot be replaced")
                 now = self._now()
                 accepted_output_ids = tuple(
-                    dict.fromkeys((*run.accepted_output_ids, accepted_output_id))
+                    dict.fromkeys((*run.accepted_output_ids, *stage_output_ids))
                 )
                 updated = run.model_copy(
                     update={
@@ -466,7 +668,7 @@ class FakeVCBrainService:
                                 queued_at=stage.queued_at,
                                 started_at=stage.started_at or now,
                                 completed_at=now,
-                                accepted_output_ids=(accepted_output_id,),
+                                accepted_output_ids=stage_output_ids,
                             ),
                         ),
                         "accepted_output_ids": accepted_output_ids,
@@ -595,10 +797,33 @@ class FakeVCBrainService:
 
     def artifact_descriptor(self, artifact_id: str) -> PrivateArtifactDescriptor:
         with self._lock:
-            for state in self._applications.values():
-                if state.artifact.artifact_id == artifact_id:
-                    return state.artifact
+            descriptor = self._artifact_descriptors.get(artifact_id)
+            if descriptor is not None:
+                return descriptor
         raise NotFoundError("artifact was not found")
+
+    def register_source_artifact(
+        self,
+        *,
+        artifact_id: str,
+        content_sha256: str,
+        media_type: str,
+        display_name: str,
+    ) -> PrivateArtifactDescriptor:
+        """Make already-stored immutable source bytes available to investors."""
+
+        descriptor = PrivateArtifactDescriptor(
+            artifact_id=artifact_id,
+            content_sha256=content_sha256,
+            media_type=media_type,
+            display_name=self._safe_display_name(display_name),
+        )
+        with self._lock:
+            existing = self._artifact_descriptors.get(artifact_id)
+            if existing is not None and existing != descriptor:
+                raise ConflictError("source artifact metadata cannot be replaced")
+            self._artifact_descriptors[artifact_id] = descriptor
+        return descriptor
 
     def read_artifact(
         self,
@@ -625,8 +850,22 @@ class FakeVCBrainService:
         company_name: str,
         founder_id: str | None = None,
         source_artifact_ids: tuple[str, ...] = (),
+        source_identity_key: str | None = None,
     ) -> OutboundCandidateView:
         now = self._now()
+        with self._lock:
+            if source_identity_key is not None:
+                existing_id = self._candidate_by_source_key.get(source_identity_key)
+                if existing_id is not None:
+                    existing = self._candidate(existing_id)
+                    merged_artifacts = tuple(
+                        dict.fromkeys((*existing.source_artifact_ids, *source_artifact_ids))
+                    )
+                    updated = existing.model_copy(
+                        update={"source_artifact_ids": merged_artifacts, "updated_at": now}
+                    )
+                    self._candidates[existing_id] = updated
+                    return updated
         candidate = OutboundCandidateView(
             outbound_candidate_id=self._id(),
             company_id=self._id(),
@@ -643,6 +882,8 @@ class FakeVCBrainService:
         )
         with self._lock:
             self._candidates[candidate.outbound_candidate_id] = candidate
+            if source_identity_key is not None:
+                self._candidate_by_source_key[source_identity_key] = candidate.outbound_candidate_id
         return candidate
 
     def list_candidates(
@@ -772,6 +1013,73 @@ class FakeVCBrainService:
         with self._lock:
             self._runs[run_id] = run
         return self._accepted(run)
+
+    def queue_sourcing_run(
+        self,
+        *,
+        input_snapshot_id: str,
+        stage_keys: tuple[str, ...],
+    ) -> RunAccepted:
+        """Create an observable queued run for an injected live sourcing coordinator."""
+
+        if not stage_keys or any(not key.strip() for key in stage_keys):
+            raise ValueError("sourcing stage keys must be non-blank")
+        if len(stage_keys) != len(set(stage_keys)):
+            raise ValueError("sourcing stage keys must be unique")
+        thesis = self.active_thesis()
+        now = self._now()
+        run = PipelineRun(
+            run_id=self._id(),
+            kind=PipelineRunKind.SOURCING,
+            status=PipelineRunStatus.QUEUED,
+            versions=self._versions(thesis.thesis_version_id),
+            input_snapshot_id=input_snapshot_id,
+            input_snapshot_as_of=now,
+            queued_at=now,
+            stages=tuple(
+                PipelineStage(
+                    stage_key=stage_key,
+                    status=PipelineStageStatus.QUEUED,
+                    queued_at=now,
+                )
+                for stage_key in stage_keys
+            ),
+        )
+        with self._lock:
+            self._runs[run.run_id] = run
+        return self._accepted(run)
+
+    def publish_sourcing_run(self, run: PipelineRun) -> PipelineRun:
+        """Publish a validated queued/running/terminal snapshot for one sourcing run."""
+
+        if run.kind is not PipelineRunKind.SOURCING:
+            raise ValueError("only sourcing runs can use the live sourcing publisher")
+        with self._lock:
+            previous = self._runs.get(run.run_id)
+            if previous is None:
+                raise NotFoundError("sourcing run was not found")
+            if (
+                previous.kind is not run.kind
+                or previous.input_snapshot_id != run.input_snapshot_id
+                or previous.input_snapshot_as_of != run.input_snapshot_as_of
+                or previous.queued_at != run.queued_at
+                or tuple(stage.stage_key for stage in previous.stages)
+                != tuple(stage.stage_key for stage in run.stages)
+            ):
+                raise ConflictError("sourcing run identity cannot be replaced")
+            order = {
+                PipelineRunStatus.QUEUED: 0,
+                PipelineRunStatus.RUNNING: 1,
+                PipelineRunStatus.SUCCEEDED: 2,
+                PipelineRunStatus.PARTIALLY_SUCCEEDED: 2,
+                PipelineRunStatus.FAILED: 2,
+            }
+            if order[run.status] < order[previous.status] or (
+                order[previous.status] == 2 and run != previous
+            ):
+                raise ConflictError("sourcing run cannot move backward or replace a terminal state")
+            self._runs[run.run_id] = run
+            return run
 
     def start_screening(self, opportunity_id: str) -> RunAccepted:
         with self._lock:
@@ -991,9 +1299,19 @@ class FakeVCBrainService:
             applied_filters=tuple(filters),
         )
 
-    def get_opportunity(self, opportunity_id: str) -> OpportunityDetail:
+    def get_opportunity(
+        self,
+        opportunity_id: str,
+        *,
+        include_claims: bool = False,
+        include_evidence: bool = False,
+    ) -> OpportunityDetail:
         with self._lock:
-            return self._detail(self._opportunity(opportunity_id))
+            return self._detail(
+                self._opportunity(opportunity_id),
+                include_claims=include_claims,
+                include_evidence=include_evidence,
+            )
 
     def query_opportunities(self, plan: OpportunityQueryPlan) -> QueryResult:
         with self._lock:
@@ -1186,8 +1504,21 @@ class FakeVCBrainService:
 
     @staticmethod
     def _versions(thesis_version: str) -> VersionManifest:
-        return VersionManifest(
-            components=(
+        return FakeVCBrainService._screening_versions(thesis_version)
+
+    @staticmethod
+    def _screening_versions(
+        thesis_version: str,
+        projection: DeterministicScreeningProjection | None = None,
+        deck_projection: DeckEvidenceProjection | None = None,
+    ) -> VersionManifest:
+        founder_score_version = (
+            projection.founder_score_version if projection is not None else "fake-founder-score.v0"
+        )
+        axis_rubric_version = (
+            projection.axis_rubric_version if projection is not None else "fake-axis-rubric.v0"
+        )
+        components = [
                 ComponentVersion(
                     component=VersionComponent.THESIS,
                     version_id=thesis_version,
@@ -1198,11 +1529,11 @@ class FakeVCBrainService:
                 ),
                 ComponentVersion(
                     component=VersionComponent.FOUNDER_SCORE,
-                    version_id="fake-founder-score.v0",
+                    version_id=founder_score_version,
                 ),
                 ComponentVersion(
                     component=VersionComponent.AXIS_RUBRIC,
-                    version_id="fake-axis-rubric.v0",
+                    version_id=axis_rubric_version,
                 ),
                 ComponentVersion(
                     component=VersionComponent.DECISION_READINESS_POLICY,
@@ -1216,8 +1547,16 @@ class FakeVCBrainService:
                     component=VersionComponent.RECOMMENDATION,
                     version_id="fake-recommendation.v0",
                 ),
+            ]
+        if deck_projection is not None:
+            components.append(
+                ComponentVersion(
+                    component=VersionComponent.TOOL,
+                    version_id=deck_projection.projection_version,
+                    name="deck-evidence-projection",
+                )
             )
-        )
+        return VersionManifest(components=tuple(components))
 
     @staticmethod
     def _coverage(
@@ -1240,6 +1579,43 @@ class FakeVCBrainService:
                 if artifact_count
                 else KnowledgeValue[datetime].unknown("no source artifact is available")
             ),
+        )
+
+    @staticmethod
+    def _coverage_with_deck_projection(
+        base: CoverageSummary,
+        projection: DeckEvidenceProjection | None,
+    ) -> CoverageSummary:
+        if projection is None:
+            return base
+        claim_by_id = {claim.claim_id: claim for claim in projection.claims}
+        conflicted_predicates = tuple(
+            dict.fromkeys(
+                claim_by_id[claim_id].predicate
+                for contradiction in projection.contradictions
+                for claim_id in contradiction.claim_ids
+                if claim_id in claim_by_id
+            )
+        )
+        freshest = projection.projected_at
+        if (
+            base.freshest_evidence_at.state is KnowledgeState.KNOWN
+            and base.freshest_evidence_at.value is not None
+        ):
+            freshest = max(freshest, base.freshest_evidence_at.value)
+        return base.model_copy(
+            update={
+                "source_count": max(base.source_count, 1),
+                "artifact_count": max(base.artifact_count, 1),
+                "evidence_count": max(base.evidence_count, len(projection.evidence)),
+                "source_categories": tuple(
+                    dict.fromkeys((*base.source_categories, SourceCategory.APPLICATION_DECK.value))
+                ),
+                "conflicted_fields": tuple(
+                    dict.fromkeys((*base.conflicted_fields, *conflicted_predicates))
+                ),
+                "freshest_evidence_at": KnowledgeValue[datetime].known(freshest),
+            }
         )
 
     def _thesis_rule_results(
@@ -1329,8 +1705,20 @@ class FakeVCBrainService:
         at: datetime,
     ) -> AssessmentEnvelope:
         assessment_id = self._id()
-        coverage = self._coverage(at, candidate.source_artifact_ids)
-        has_source_evidence = coverage.artifact_count > 0
+        projection = self._screening_bridge.project(
+            candidate.outbound_candidate_id,
+            founder_identity=candidate.founder_id,
+            as_of=at,
+            id_factory=self._id,
+        )
+        coverage = (
+            projection.coverage
+            if projection is not None
+            else self._coverage(at, candidate.source_artifact_ids)
+        )
+        has_source_evidence = (
+            coverage.evidence_count > 0 if projection is not None else coverage.artifact_count > 0
+        )
         return AssessmentEnvelope(
             assessment_id=assessment_id,
             assessment_version_id=self._id(),
@@ -1339,15 +1727,22 @@ class FakeVCBrainService:
                 founder_id=candidate.founder_id,
                 company_id=KnowledgeValue[str].known(candidate.company_id),
             ),
-            versions=self._versions(thesis.thesis_version_id),
+            versions=self._screening_versions(
+                thesis.thesis_version_id,
+                projection,
+            ),
             input_snapshot_id=candidate.outbound_candidate_id,
             input_snapshot_as_of=at,
             coverage=coverage,
             deterministic_results=self._thesis_rule_results(thesis),
-            founder_score=KnowledgeValue.unknown(
-                "Founder Score remains unknown in the sparse deterministic fake"
+            founder_score=(
+                projection.founder_score
+                if projection is not None
+                else KnowledgeValue.unknown(
+                    "Founder Score remains unknown in the sparse deterministic fake"
+                )
             ),
-            axes=self._axes(coverage),
+            axes=(projection.axes if projection is not None else self._axes(coverage)),
             claim_ids=(),
             evidence_ids=(),
             recommendation=Recommendation(
@@ -1397,31 +1792,198 @@ class FakeVCBrainService:
         at: datetime,
     ) -> AssessmentEnvelope:
         assessment_id = self._id()
-        blocker_id = self._id()
         application = self._applications.get(opportunity.application_id)
-        source_artifact_ids = (application.artifact.artifact_id,) if application is not None else ()
-        coverage = self._coverage(at, source_artifact_ids)
+        deck_projection = opportunity.deck_evidence_projection
+        candidate = (
+            self._candidates.get(opportunity.outbound_candidate_id)
+            if opportunity.outbound_candidate_id is not None
+            else None
+        )
+        application_artifact_ids = (
+            (application.artifact.artifact_id,) if application is not None else ()
+        )
+        source_artifact_ids = tuple(
+            dict.fromkeys(
+                (
+                    *(candidate.source_artifact_ids if candidate is not None else ()),
+                    *application_artifact_ids,
+                )
+            )
+        )
+        projection = self._screening_bridge.project(
+            opportunity.opportunity_id,
+            founder_identity=opportunity.founder_id,
+            as_of=at,
+            id_factory=self._id,
+        )
+        base_coverage = (
+            projection.coverage
+            if projection is not None
+            else self._coverage(at, source_artifact_ids)
+        )
+        coverage = self._coverage_with_deck_projection(base_coverage, deck_projection)
+        memo_sections = (
+            deck_projection.memo_sections
+            if deck_projection is not None
+            else tuple(
+                MemoSection(
+                    kind=kind,
+                    content=KnowledgeValue[str].unknown(
+                        "No accepted deck Evidence projection supports this section."
+                    ),
+                )
+                for kind in (
+                    MemoSectionKind.COMPANY_SNAPSHOT,
+                    MemoSectionKind.INVESTMENT_HYPOTHESES,
+                    MemoSectionKind.SWOT,
+                    MemoSectionKind.PROBLEM_AND_PRODUCT,
+                    MemoSectionKind.TRACTION_AND_KPIS,
+                )
+            )
+        )
+        founder_identity_known = opportunity.founder_id.state is KnowledgeState.KNOWN
+        analysis_sections_unknown = any(
+            section.kind
+            in {MemoSectionKind.INVESTMENT_HYPOTHESES, MemoSectionKind.SWOT}
+            and section.content.state is not KnowledgeState.KNOWN
+            for section in memo_sections
+        )
+        checks: list[ReadinessCheck] = []
+        blockers: list[ReadinessBlocker] = []
+        diligence_actions: list[DiligenceAction] = []
+        if founder_identity_known:
+            checks.append(
+                ReadinessCheck(
+                    check_key="founder_identity",
+                    status=ReadinessCheckStatus.SATISFIED,
+                    reason="A canonical Founder identity is linked to the Opportunity.",
+                )
+            )
+        else:
+            founder_blocker_id = self._id()
+            checks.append(
+                ReadinessCheck(
+                    check_key="founder_identity",
+                    status=ReadinessCheckStatus.BLOCKING,
+                    reason="Founder identity remains unresolved.",
+                )
+            )
+            blockers.append(
+                ReadinessBlocker(
+                    blocker_id=founder_blocker_id,
+                    check_key="founder_identity",
+                    reason="Founder identity must be resolved before decision readiness.",
+                )
+            )
+            diligence_actions.append(
+                DiligenceAction(
+                    action_id=self._id(),
+                    status=DiligenceActionStatus.OPEN,
+                    description="Resolve the individual founder identities.",
+                    requested_evidence=(
+                        "Founder names, roles, and one verifiable profile or interview."
+                    ),
+                )
+            )
+
+        contradictions = (
+            deck_projection.contradictions if deck_projection is not None else ()
+        )
+        if contradictions:
+            checks.append(
+                ReadinessCheck(
+                    check_key="deck_contradictions",
+                    status=ReadinessCheckStatus.BLOCKING,
+                    reason="The deck contains unresolved competing labeled assertions.",
+                    related_record_ids=tuple(
+                        contradiction.contradiction_id for contradiction in contradictions
+                    ),
+                )
+            )
+            for contradiction in contradictions:
+                contradiction_blocker_id = self._id()
+                blockers.append(
+                    ReadinessBlocker(
+                        blocker_id=contradiction_blocker_id,
+                        check_key="deck_contradictions",
+                        reason=contradiction.summary,
+                        related_record_ids=(contradiction.contradiction_id,),
+                    )
+                )
+                diligence_actions.append(
+                    DiligenceAction(
+                        action_id=self._id(),
+                        status=DiligenceActionStatus.OPEN,
+                        description="Resolve a competing labeled pitch-deck assertion.",
+                        resolves_claim_ids=contradiction.claim_ids,
+                        resolves_contradiction_ids=(contradiction.contradiction_id,),
+                        requested_evidence=(
+                            "Provide one dated source or founder clarification that resolves "
+                            "the competing values."
+                        ),
+                    )
+                )
+        else:
+            checks.append(
+                ReadinessCheck(
+                    check_key="deck_contradictions",
+                    status=ReadinessCheckStatus.SATISFIED,
+                    reason="No competing labeled deck assertions were detected.",
+                )
+            )
+
+        if analysis_sections_unknown:
+            analysis_blocker_id = self._id()
+            checks.append(
+                ReadinessCheck(
+                    check_key="supported_memo_analysis",
+                    status=ReadinessCheckStatus.BLOCKING,
+                    reason=(
+                        "Investment Hypotheses and SWOT remain Unknown until supported "
+                        "analysis is accepted."
+                    ),
+                )
+            )
+            blockers.append(
+                ReadinessBlocker(
+                    blocker_id=analysis_blocker_id,
+                    check_key="supported_memo_analysis",
+                    reason="Required analytical memo sections remain explicitly Unknown.",
+                )
+            )
+            diligence_actions.append(
+                DiligenceAction(
+                    action_id=self._id(),
+                    status=DiligenceActionStatus.OPEN,
+                    description="Complete evidence-backed hypotheses and SWOT analysis.",
+                    requested_evidence=(
+                        "Accepted Claims and Evidence supporting investment hypotheses, "
+                        "strengths, weaknesses, opportunities, and threats."
+                    ),
+                )
+            )
+        else:
+            checks.append(
+                ReadinessCheck(
+                    check_key="supported_memo_analysis",
+                    status=ReadinessCheckStatus.SATISFIED,
+                    reason="Required analytical memo sections have accepted support.",
+                )
+            )
+
         readiness = DecisionReadiness(
             readiness_id=self._id(),
             readiness_version_id=self._id(),
             screening_case_id=opportunity.screening_case_id,
             policy_version="fake-readiness.v0",
             evaluated_at=at,
-            status=DecisionReadinessStatus.BLOCKED,
-            checks=(
-                ReadinessCheck(
-                    check_key="founder_identity",
-                    status=ReadinessCheckStatus.BLOCKING,
-                    reason="Founder identity is unresolved in the fake input snapshot.",
-                ),
+            status=(
+                DecisionReadinessStatus.BLOCKED
+                if blockers
+                else DecisionReadinessStatus.READY
             ),
-            blockers=(
-                ReadinessBlocker(
-                    blocker_id=blocker_id,
-                    check_key="founder_identity",
-                    reason="Founder identity must be resolved before decision readiness.",
-                ),
-            ),
+            checks=tuple(checks),
+            blockers=tuple(blockers),
         )
         memo = InvestmentMemo(
             memo_id=self._id(),
@@ -1433,22 +1995,42 @@ class FakeVCBrainService:
             thesis_version=thesis.thesis_version_id,
             evidence_as_of=at,
             generated_at=at,
-            sections=tuple(
-                MemoSection(
-                    kind=kind,
-                    content=KnowledgeValue[str].unknown(
-                        "The deterministic fake does not invent unsupported facts"
-                    ),
-                )
-                for kind in (
-                    MemoSectionKind.COMPANY_SNAPSHOT,
-                    MemoSectionKind.INVESTMENT_HYPOTHESES,
-                    MemoSectionKind.SWOT,
-                    MemoSectionKind.PROBLEM_AND_PRODUCT,
-                    MemoSectionKind.TRACTION_AND_KPIS,
-                )
-            ),
+            sections=memo_sections,
         )
+        if contradictions:
+            recommendation_action = RecommendationAction.NEEDS_INFORMATION
+            recommendation_summary = (
+                "Unresolved competing deck assertions block decision readiness."
+            )
+            recommendation_claim_ids = tuple(
+                dict.fromkeys(
+                    claim_id
+                    for contradiction in contradictions
+                    for claim_id in contradiction.claim_ids
+                )
+            )
+            next_action = "Resolve the cited competing values before investment review."
+        elif not founder_identity_known:
+            recommendation_action = RecommendationAction.NEEDS_INFORMATION
+            recommendation_summary = "A material founder-identity gap blocks readiness."
+            recommendation_claim_ids = ()
+            next_action = "Request the individual founder names and roles."
+        elif analysis_sections_unknown:
+            recommendation_action = RecommendationAction.NEEDS_INFORMATION
+            recommendation_summary = (
+                "Required analytical memo sections remain explicitly Unknown."
+            )
+            recommendation_claim_ids = ()
+            next_action = "Complete cited Investment Hypotheses and SWOT analysis."
+        else:
+            recommendation_action = RecommendationAction.MANUAL_REVIEW
+            recommendation_summary = "The deterministic evidence package is ready for review."
+            recommendation_claim_ids = (
+                tuple(claim.claim_id for claim in deck_projection.claims)
+                if deck_projection is not None
+                else ()
+            )
+            next_action = "A human investor should review the cited evidence package."
         recommendation = Recommendation(
             recommendation_id=self._id(),
             recommendation_version_id=self._id(),
@@ -1458,13 +2040,14 @@ class FakeVCBrainService:
             ),
             assessment_id=assessment_id,
             policy_version="fake-recommendation.v0",
-            action=RecommendationAction.NEEDS_INFORMATION,
+            action=recommendation_action,
             reasons=(
                 RecommendationReason(
-                    summary="A material founder-identity gap blocks decision readiness."
+                    summary=recommendation_summary,
+                    claim_ids=recommendation_claim_ids,
                 ),
             ),
-            next_actions=("Request the individual founder names and roles.",),
+            next_actions=(next_action,),
             created_at=at,
         )
         return AssessmentEnvelope(
@@ -1473,30 +2056,41 @@ class FakeVCBrainService:
             identity=FullAssessmentIdentity(
                 origin=opportunity.origin,
                 application_id=opportunity.application_id,
+                outbound_candidate_id=opportunity.outbound_candidate_id,
                 opportunity_id=opportunity.opportunity_id,
                 screening_case_id=opportunity.screening_case_id,
                 company_id=opportunity.company_id,
                 founder_id=opportunity.founder_id,
             ),
-            versions=self._versions(thesis.thesis_version_id),
-            input_snapshot_id=self._id(),
+            versions=self._screening_versions(
+                thesis.thesis_version_id,
+                projection,
+                deck_projection,
+            ),
+            input_snapshot_id=(
+                deck_projection.projection_id if deck_projection is not None else self._id()
+            ),
             input_snapshot_as_of=at,
             coverage=coverage,
             deterministic_results=self._thesis_rule_results(thesis),
-            founder_score=KnowledgeValue.unknown("founder_identity_unresolved"),
-            axes=self._axes(coverage),
-            claim_ids=(),
-            evidence_ids=(),
-            diligence_actions=(
-                DiligenceAction(
-                    action_id=self._id(),
-                    status=DiligenceActionStatus.OPEN,
-                    description="Resolve the individual founder identities.",
-                    requested_evidence=(
-                        "Founder names, roles, and one verifiable profile or interview."
-                    ),
-                ),
+            founder_score=(
+                projection.founder_score
+                if projection is not None
+                else KnowledgeValue.unknown("founder_identity_unresolved")
             ),
+            axes=(projection.axes if projection is not None else self._axes(coverage)),
+            claim_ids=(
+                tuple(claim.claim_id for claim in deck_projection.claims)
+                if deck_projection is not None
+                else ()
+            ),
+            evidence_ids=(
+                tuple(evidence.evidence_id for evidence in deck_projection.evidence)
+                if deck_projection is not None
+                else ()
+            ),
+            contradictions=contradictions,
+            diligence_actions=tuple(diligence_actions),
             decision_readiness=readiness,
             memo=memo,
             recommendation=recommendation,
@@ -1521,7 +2115,13 @@ class FakeVCBrainService:
             updated_at=state.updated_at,
         )
 
-    def _detail(self, state: _OpportunityState) -> OpportunityDetail:
+    def _detail(
+        self,
+        state: _OpportunityState,
+        *,
+        include_claims: bool = False,
+        include_evidence: bool = False,
+    ) -> OpportunityDetail:
         latest = state.assessments[-1] if state.assessments else None
         now = self._now()
         target_at = state.started_at + timedelta(hours=24)
@@ -1536,6 +2136,7 @@ class FakeVCBrainService:
         elapsed = max(0, int((now - state.started_at).total_seconds()))
         assessments = tuple(state.assessments)
         memos = tuple(item.memo for item in assessments if item.memo is not None)
+        deck_projection = state.deck_evidence_projection
         return OpportunityDetail(
             opportunity_id=state.opportunity_id,
             origin=state.origin,
@@ -1547,8 +2148,16 @@ class FakeVCBrainService:
             screening_status=state.screening_status,
             latest_assessment=latest,
             assessment_history=assessments,
-            claims=(),
-            evidence=(),
+            claims=(
+                deck_projection.claims
+                if include_claims and deck_projection is not None
+                else ()
+            ),
+            evidence=(
+                deck_projection.evidence
+                if include_evidence and deck_projection is not None
+                else ()
+            ),
             latest_memo=(latest.memo if latest is not None else None),
             memo_revisions=memos,
             latest_recommendation=(latest.recommendation if latest is not None else None),

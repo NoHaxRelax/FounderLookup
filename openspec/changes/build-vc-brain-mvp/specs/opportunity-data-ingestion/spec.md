@@ -53,6 +53,14 @@ The system SHALL support bounded on-demand collection from heterogeneous outboun
 - **WHEN** an approved public social-traction record is supplied through a conforming discovery or source adapter
 - **THEN** the system preserves it as a time-stamped Source Artifact with its data classification, origin, exact locator, and subject relationship
 
+#### Scenario: Public hackathon showcase exposes a project and deck
+- **WHEN** an approved public event, cohort, project-gallery, finalist, winner, or demo page explicitly publishes a project or team, participant display names or public profiles, and a pitch-deck, repository, or demo link
+- **THEN** the system preserves the event-to-project-to-participant and linked-artifact relationships with exact source locators, treats participant identity as unverified until corroborated, and may acquire the public linked artifact only within the configured URL, media, request, page, byte, time, terms, and robots policies
+
+#### Scenario: Public showcase omits a deck or participant
+- **WHEN** an approved hackathon or startup-showcase source does not explicitly publish a deck or participant identity
+- **THEN** the missing relationship remains Unknown, no contact detail is sought, and the absence does not lower founder or project quality
+
 #### Scenario: Recurring scan refreshes Memory
 - **WHEN** the configured recurring trigger invokes the same approved source twice
 - **THEN** both runs remain observable, unchanged artifacts are not duplicated, and any changed source content creates a new time-stamped version linked to its history
@@ -176,6 +184,17 @@ The system SHALL report source coverage, freshness, extraction certainty, and un
 - **WHEN** the configured discovery provider returns no result for a possible traction, competitor, or founder signal
 - **THEN** the relevant field remains Unknown and the no-result query is retained only as collection telemetry
 
+### Requirement: Outbound discovery uses a bounded agentic retrieval loop
+The outbound sourcing path SHALL use the selected thin LangGraph orchestration to move from an investor-approved query plan through provider-neutral retrieval, schema-constrained extraction, explicit Evidence-gap assessment, and convergence. The graph SHALL enforce configured round, request, page, elapsed-time, and cost budgets; retain every query, accepted artifact, gap, partial failure, and stop reason; and stop when Evidence is sufficient, a round adds no new accepted Evidence, a budget is exhausted, or a provider fails without a useful retry path. Provider adapters, canonical validation, and domain scoring SHALL remain callable and testable without LangGraph. The loop MUST NOT autonomously send outreach, infer private contact details, verify a person from a display name, create a human Decision, or transfer funds.
+
+#### Scenario: Evidence gap produces one bounded follow-up round
+- **WHEN** the first retrieval round finds a project and public demo but an explicitly required repository or public contact route remains Unknown
+- **THEN** the graph may issue a validated follow-up query within budget, records its reason and result, and then either converges or records the remaining gap
+
+#### Scenario: Retrieval stops adding Evidence
+- **WHEN** a graph round yields no new deterministically accepted Evidence
+- **THEN** the graph stops with `no_new_evidence`, preserves prior artifacts, and leaves unresolved fields Unknown rather than searching indefinitely
+
 ### Requirement: Ingestion runs are bounded and observable
 Every ingestion run SHALL expose a stable run identifier, status, source operations, counts, elapsed time, retries, partial failures, and provider usage or cost when available. Runs SHALL enforce configured query, page, depth, time, and cost budgets, and one source failure SHALL NOT erase successfully ingested records from other sources. An authorized retry SHALL preserve accepted artifacts and resume from the last safe stage or create a linked retry run against the same identifiable input snapshot.
 
@@ -194,7 +213,7 @@ Every ingestion run SHALL expose a stable run identifier, status, source operati
 ### Requirement: Sensitive data and credentials remain controlled
 The system SHALL keep external-provider credentials server-side, restrict access to non-public uploaded Source Artifacts, and apply an explicit allow/deny and retention policy before sending content to a third party. Public availability alone MUST NOT remove the need to record source terms, data classification, and collection purpose.
 
-The selected Mistral OCR adapter SHALL use a bounded stateless OCR request rather than a public deck URL or stateful file/batch upload. Founder-private deck transfer SHALL default to disabled and SHALL require explicit runtime approval confirming the account's training-use setting, retention or Zero Data Retention posture, permitted region, and collection purpose. The Mistral OCR selection is limited to extraction and MUST NOT be interpreted as approval for investment-intelligence model analysis.
+The selected Mistral OCR adapter SHALL use a bounded stateless OCR request rather than a public deck URL or stateful file/batch upload. Founder-private transfer to Mistral or the selected OpenAI structured-intelligence adapter SHALL require an explicit runtime data-class enablement rather than following from the presence of a key. The normal Mistral path SHALL require confirmed training-use, retention, region, and purpose controls. For this hackathon MVP the human reviewer has instead approved a separate demo-only private-processing risk-acceptance override with an explicit OCR purpose; the system MUST preserve unknown provider/account control states rather than falsely recording them as confirmed. Original bytes remain private, requests use bounded/stateless or `store=false` modes where supported, and generated output remains derived data subject to Evidence validation.
 
 #### Scenario: Pitch deck enrichment is requested
 - **WHEN** an ingestion step would send private deck content to an external provider not approved for that data class
@@ -205,7 +224,7 @@ The selected Mistral OCR adapter SHALL use a bounded stateless OCR request rathe
 - **THEN** no provider secret or private internal credential is included in the response
 
 ### Requirement: Outbound sourcing draws on a broad OSINT source palette
-The system SHALL support open-source-intelligence (OSINT) collection across many independent public source categories rather than only developer activity and professional profiles. Supported categories SHALL include developer activity, scholarly and research output, patents, company and regulatory and court-filing registries, product launches, technical-community reputation, long-form authored writing, accelerator and hackathon cohorts, and approved professional and social profiles. Each category SHALL be collected through the provider-neutral ingestion interface, SHALL preserve original-source provenance, and one category's absence MUST NOT become a negative fact. OSINT collection SHALL serve both outbound discovery of new Outbound Candidates and enrichment or verification of inbound Applications.
+The system SHALL support open-source-intelligence (OSINT) collection across many independent public source categories rather than only developer activity and professional profiles. Supported categories SHALL include developer activity, scholarly and research output, patents, company and regulatory and court-filing registries, product launches, technical-community reputation, long-form authored writing, accelerator and hackathon cohorts and startup showcases, and approved professional and social profiles. Hackathon/showcase normalization SHALL preserve the event or cohort, project/team, explicitly public participant display names/profile links, explicitly linked public pitch-deck, repository, and demo relationships, and source-published public contact routes useful for human follow-up. A contact route SHALL retain an exact source locator and classification such as website, contact page, public email, or public profile. The system MUST NOT guess, enrich, or hunt for private contact details or convert a display-name assertion into a verified Founder identity. Each category SHALL be collected through the provider-neutral ingestion interface, SHALL preserve original-source provenance, and one category's absence MUST NOT become a negative fact. OSINT collection SHALL serve both outbound discovery of new Outbound Candidates and enrichment or verification of inbound Applications.
 
 #### Scenario: Multiple OSINT categories enrich one candidate
 - **WHEN** outbound collection finds source-backed signals for one Outbound Candidate across three or more independent categories
@@ -218,6 +237,25 @@ The system SHALL support open-source-intelligence (OSINT) collection across many
 #### Scenario: Authoritative source is preferred over a generic snippet
 - **WHEN** a source-specific API can supply an authoritative activity or research fact
 - **THEN** the system records it as primary Evidence in preference to a generic web-discovery snippet
+
+#### Scenario: Linked public pitch deck is acquired
+- **WHEN** an approved, acquired hackathon or startup-showcase page contains an explicitly labeled public pitch-deck URL and collection budget remains
+- **THEN** the system policy-checks and acquires that exact original URL as a separate immutable Source Artifact linked to the project; a search snippet, inaccessible URL, or unlabeled document is not promoted to pitch-deck Evidence
+
+#### Scenario: Source publishes a public follow-up route
+- **WHEN** an approved acquired source explicitly publishes a project website, contact page, public email address, or public profile for the project or participant display name
+- **THEN** the system may expose that route to the investor with its exact source locator and unverified-identity label, while absent routes remain Unknown and trigger no private-data search
+
+### Requirement: Acquired content may use schema-constrained semantic extraction
+The system MAY pass a bounded acquired public page or explicitly approved founder-private extraction through OpenAI `gpt-5.6-luna` using strict Structured Outputs. The request SHALL keep credentials server-side, disable provider storage where supported, cap input/output/time/response bytes, and record model, prompt, schema, usage, and safe failure metadata. The output SHALL distinguish missing fields from known values and SHALL include exact input-backed excerpts or locators for every emitted field and URL. Deterministic validation MUST reject unsupported excerpts, unsafe or absent URLs, identity verification not present in the source, and malformed, refused, incomplete, or over-budget output. A model failure MUST preserve accepted artifacts and fall back to deterministic parsing or explicit Unknown values.
+
+#### Scenario: Structured extraction finds showcase relationships
+- **WHEN** a bounded Tavily-acquired showcase page explicitly contains an event, project, participant display names, repository, demo, and public deck link
+- **THEN** strict structured output proposes those fields with input-backed locators, deterministic validation accepts only exact supported relationships, and participant identities remain unverified
+
+#### Scenario: Structured output invents a field or URL
+- **WHEN** the model returns content that cannot be found in the immutable acquired input or a URL that fails public-source policy
+- **THEN** the system rejects that value or the whole output safely, records validation telemetry, and does not persist it as Evidence
 
 #### Scenario: OSINT enriches an inbound application
 - **WHEN** a founder submits an inbound Application with a company name and deck

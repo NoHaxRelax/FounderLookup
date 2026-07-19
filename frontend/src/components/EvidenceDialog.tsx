@@ -1,5 +1,9 @@
-import { ExternalLink, FileSearch, LockKeyhole, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import {
+  ExportOutlined,
+  FileSearchOutlined,
+  LockOutlined,
+} from '@ant-design/icons'
+import { Button, Card, Descriptions, Modal, Space, Typography } from 'antd'
 import type { EvidenceItem } from '../api/types'
 import { KnowledgeState } from './KnowledgeState'
 import { StatusBadge } from './StatusBadge'
@@ -10,76 +14,76 @@ export interface EvidenceDialogProps {
 }
 
 export function EvidenceDialog({ evidence, onClose }: EvidenceDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (evidence && dialog && !dialog.open) dialog.showModal()
-    if (!evidence && dialog?.open) dialog.close()
-  }, [evidence])
-
   return (
-    <dialog
-      ref={dialogRef}
+    <Modal
       className="evidence-dialog"
-      aria-labelledby="evidence-dialog-title"
+      open={evidence !== null}
       onCancel={onClose}
-      onClose={onClose}
+      footer={null}
+      width="min(44rem, calc(100dvi - 2rem))"
+      title={
+        evidence ? (
+          <div>
+            <p className="eyebrow">Evidence · {evidence.sourceCategory}</p>
+            <h2 id="evidence-dialog-title">{evidence.sourceName}</h2>
+          </div>
+        ) : undefined
+      }
     >
       {evidence && (
         <div className="dialog-content">
-          <header className="dialog-header">
-            <div>
-              <p className="eyebrow">Evidence · {evidence.sourceCategory}</p>
-              <h2 id="evidence-dialog-title">{evidence.sourceName}</h2>
-            </div>
-            <form method="dialog">
-              <button className="icon-button" type="submit" aria-label="Close evidence">
-                <X aria-hidden="true" />
-              </button>
-            </form>
-          </header>
-
-          <div className="cluster">
+          <Space wrap>
             <StatusBadge tone={evidence.availability === 'available' ? 'positive' : 'warning'}>
               {evidence.availability.replaceAll('_', ' ')}
             </StatusBadge>
             <StatusBadge tone={evidence.classification === 'public' ? 'info' : 'warning'}>
-              {evidence.classification === 'founder_private' && <LockKeyhole aria-hidden="true" />}
+              {evidence.classification === 'founder_private' && <LockOutlined aria-hidden="true" />}
               {evidence.classification.replaceAll('_', ' ')}
             </StatusBadge>
-          </div>
+          </Space>
 
-          <dl className="metadata-list">
-            <div>
-              <dt>Stable source artifact</dt>
-              <dd><code>{evidence.sourceArtifactId}</code></dd>
-            </div>
-            <div>
-              <dt>Collected</dt>
-              <dd>{new Date(evidence.collectedAt).toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Source event time</dt>
-              <dd><KnowledgeState value={evidence.sourceEventTime} compact /></dd>
-            </div>
-          </dl>
+          <Descriptions
+            className="evidence-metadata"
+            column={1}
+            items={[
+              {
+                key: 'artifact',
+                label: 'Stable source artifact',
+                children: <Typography.Text code>{evidence.sourceArtifactId}</Typography.Text>,
+              },
+              {
+                key: 'collected',
+                label: 'Collected',
+                children: new Date(evidence.collectedAt).toLocaleString(),
+              },
+              {
+                key: 'event-time',
+                label: 'Source event time',
+                children: <KnowledgeState value={evidence.sourceEventTime} compact />,
+              },
+            ]}
+          />
 
-          <section className="locator-card" aria-labelledby="source-locator-title">
-            <FileSearch aria-hidden="true" />
+          <Card className="locator-card" aria-labelledby="source-locator-title">
+            <FileSearchOutlined aria-hidden="true" />
             <div>
               <h3 id="source-locator-title">Source locator</h3>
               <p><strong>{evidence.locator.label}</strong></p>
               <blockquote>{evidence.locator.excerpt}</blockquote>
               {evidence.locator.uri && (
-                <a href={evidence.locator.uri} target="_blank" rel="noreferrer">
-                  Open source <ExternalLink aria-hidden="true" />
-                </a>
+                <Button
+                  href={evidence.locator.uri}
+                  target="_blank"
+                  rel="noreferrer"
+                  icon={<ExportOutlined />}
+                >
+                  Open source
+                </Button>
               )}
             </div>
-          </section>
+          </Card>
         </div>
       )}
-    </dialog>
+    </Modal>
   )
 }

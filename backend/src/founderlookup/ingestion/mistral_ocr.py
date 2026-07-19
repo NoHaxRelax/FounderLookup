@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
@@ -40,6 +41,7 @@ from founderlookup.ingestion.extraction import (
 )
 
 MISTRAL_OCR_ENDPOINT: Final = "https://api.mistral.ai/v1/ocr"
+MISTRAL_MODELS_ENDPOINT: Final = "https://api.mistral.ai/v1/models"
 MISTRAL_OCR_ADAPTER_VERSION: Final = "mistral-ocr-http.v0"
 DEFAULT_MISTRAL_OCR_MODEL: Final = "mistral-ocr-latest"
 _PDF_DATA_URL_PREFIX: Final = "data:application/pdf;base64,"
@@ -347,6 +349,11 @@ class _MistralResponse(_MistralResponseModel):
     usage_info: _MistralUsage = Field(default_factory=_MistralUsage)
 
 
+class _MistralModelCard(_MistralResponseModel):
+    id: _ModelName
+    aliases: list[_ModelName] = Field(default_factory=list)
+
+
 def _known_or_unknown_confidence(
     value: float | None,
     *,
@@ -400,8 +407,47 @@ class MistralOcrExtractor:
     def _model_matches_request(self, concrete_model: str) -> bool:
         requested = self._settings.model_alias
         if requested == DEFAULT_MISTRAL_OCR_MODEL:
-            return concrete_model.startswith("mistral-ocr-4")
+            return concrete_model == requested or concrete_model.startswith("mistral-ocr-4")
         return concrete_model == requested
+
+    async def _resolve_concrete_model(self, reported_model: str) -> str:
+        """Resolve a returned ``latest`` alias without transferring document content again."""
+
+        if not self._model_matches_request(reported_model):
+            raise MistralOcrResponseError
+        if reported_model != DEFAULT_MISTRAL_OCR_MODEL:
+            return reported_model
+
+        try:
+            async with self._client.stream(
+                "GET",
+                f"{MISTRAL_MODELS_ENDPOINT}/{reported_model}",
+                headers={"Authorization": f"Bearer {self._settings.api_key.get_secret_value()}"},
+                timeout=self._settings.timeout_seconds,
+                follow_redirects=False,
+            ) as response:
+                response_content = await self._read_bounded_response(response)
+                status_code = response.status_code
+        except (httpx.TimeoutException, httpx.RequestError):
+            raise MistralOcrTransportError from None
+
+        if status_code < 200 or status_code >= 300:
+            raise MistralOcrHttpError
+        try:
+            model_card = _MistralModelCard.model_validate_json(response_content)
+        except ValueError:
+            raise MistralOcrResponseError from None
+        concrete_aliases = tuple(
+            alias
+            for alias in model_card.aliases
+            if re.fullmatch(r"mistral-ocr-\d+-\d+", alias) is not None
+        )
+        if model_card.id != reported_model or len(concrete_aliases) != 1:
+            raise MistralOcrResponseError
+        concrete_model = concrete_aliases[0]
+        if not concrete_model.startswith("mistral-ocr-4"):
+            raise MistralOcrResponseError
+        return concrete_model
 
     def _parse_response(
         self,
@@ -540,4 +586,13 @@ class MistralOcrExtractor:
             response_payload = json.loads(response_content)
         except ValueError:
             raise MistralOcrResponseError from None
+        try:
+            reported_response = _MistralResponse.model_validate(response_payload)
+        except ValueError:
+            raise MistralOcrResponseError from None
+        concrete_model = await self._resolve_concrete_model(reported_response.model)
+        if concrete_model != reported_response.model:
+            if not isinstance(response_payload, dict):
+                raise MistralOcrResponseError
+            response_payload = {**response_payload, "model": concrete_model}
         return self._parse_response(response_payload, request=request)

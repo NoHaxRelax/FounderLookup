@@ -1,13 +1,24 @@
 import {
-  CheckCircle2,
-  Clock3,
-  FileKey2,
-  FileText,
-  Inbox,
-  LockKeyhole,
-  ShieldCheck,
-  UploadCloud,
-} from 'lucide-react'
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  FileProtectOutlined,
+  FileTextOutlined,
+  InboxOutlined,
+  LockOutlined,
+  SafetyCertificateOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  Result,
+  Steps,
+  Typography,
+} from 'antd'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type {
   ApplicationReceipt,
@@ -39,50 +50,96 @@ function FounderStatusCard({
   receipt?: ApplicationReceipt
 }) {
   return (
-    <section className="receipt-card" aria-labelledby="receipt-title">
-      <div className="receipt-card__success"><CheckCircle2 aria-hidden="true" /></div>
-      <StatusBadge tone={status.targetState === 'missed' ? 'warning' : 'positive'}>
-        {status.stage}
-      </StatusBadge>
-      <h2 id="receipt-title">
-        {receipt ? 'Your application is safely in the queue' : 'Private founder status'}
-      </h2>
-      <p>
-        This bounded view contains receipt, stage, timing, and focused requests only. It does not
-        expose investor scoring. No investment decision was made.
-      </p>
+    <Card className="receipt-card" aria-labelledby="receipt-title">
+      <Result
+        status="success"
+        icon={<CheckCircleOutlined />}
+        title={
+          <h2 id="receipt-title">
+            {receipt ? 'Your application is safely in the queue' : 'Private founder status'}
+          </h2>
+        }
+        subTitle="This bounded view contains receipt, stage, timing, and focused requests only. Internal review details stay private. No investment decision was made; no final outcome is implied while review is in progress."
+      />
 
-      <dl className="status-steps">
-        <div>
-          <dt><ShieldCheck aria-hidden="true" /> Application</dt>
-          <dd>{status.stage}</dd>
-        </div>
-        <div>
-          <dt><Clock3 aria-hidden="true" /> Review target</dt>
-          <dd>{status.targetLabel}</dd>
-        </div>
-        <div>
-          <dt><FileText aria-hidden="true" /> Focused request</dt>
-          <dd>{status.focusedRequest ?? 'None'}</dd>
-        </div>
-      </dl>
+      <div className="receipt-card__status">
+        <StatusBadge tone={status.targetState === 'missed' ? 'warning' : 'positive'}>
+          {status.stage}
+        </StatusBadge>
+      </div>
 
-      {receipt && (
-        <div className="capability-card">
-          <FileKey2 aria-hidden="true" />
-          <div>
-            <h3>Keep your private status link</h3>
-            <p>Anyone with this capability can view the bounded founder status. Do not share it publicly.</p>
-            <a href={receipt.founderStatusUrl}>Open private status</a>
-          </div>
-        </div>
+      <Descriptions
+        className="status-steps"
+        column={1}
+        items={[
+          {
+            key: 'received',
+            label: <span><SafetyCertificateOutlined /> Received</span>,
+            children: new Date(status.receivedAt).toLocaleString(),
+          },
+          {
+            key: 'stage',
+            label: <span><SafetyCertificateOutlined /> Current stage</span>,
+            children: status.stage,
+          },
+          {
+            key: 'updated',
+            label: <span><ClockCircleOutlined /> Last update</span>,
+            children: new Date(status.lastUpdatedAt).toLocaleString(),
+          },
+          {
+            key: 'target',
+            label: <span><ClockCircleOutlined /> Review target</span>,
+            children: status.targetLabel,
+          },
+          {
+            key: 'request',
+            label: <span><FileTextOutlined /> Focused request</span>,
+            children: status.focusedRequest ?? 'None',
+          },
+          {
+            key: 'outcome',
+            label: <span><CheckCircleOutlined /> Outcome or next action</span>,
+            children: (
+              <span>
+                {status.approvedOutcome ?? status.nextAction ?? 'Review is still in progress.'}
+                {status.outcomeAt && <> · {new Date(status.outcomeAt).toLocaleString()}</>}
+              </span>
+            ),
+          },
+        ]}
+      />
+
+      {status.informationRequests.length > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          title="Information requested"
+          description={<ul>{status.informationRequests.map((request) => <li key={request}>{request}</li>)}</ul>}
+        />
       )}
 
-      <p className="receipt-id">
-        Application <code>{status.applicationId}</code>
-        {receipt && <> · Run <code>{receipt.runId}</code></>}
-      </p>
-    </section>
+      {receipt && (
+        <Alert
+          className="capability-card"
+          type="warning"
+          showIcon
+          icon={<FileProtectOutlined />}
+          title="Keep your private status link"
+          description={
+            <div>
+              <p>Anyone with this capability can view the bounded founder status. Do not share it publicly.</p>
+              <Button href={receipt.founderStatusUrl}>Open private status</Button>
+            </div>
+          }
+        />
+      )}
+
+      <Typography.Paragraph className="receipt-id" type="secondary">
+        Application <Typography.Text code>{status.applicationId}</Typography.Text>
+        {receipt && <> · Run <Typography.Text code>{receipt.runId}</Typography.Text></>}
+      </Typography.Paragraph>
+    </Card>
   )
 }
 
@@ -188,10 +245,10 @@ export function FounderIntake({
     return (
       <div className="page page--narrow">
         <header className="apply-hero">
-          <div className="apply-hero__icon"><FileKey2 aria-hidden="true" /></div>
+          <div className="apply-hero__icon"><FileProtectOutlined aria-hidden="true" /></div>
           <p className="eyebrow">Capability-scoped view</p>
           <h1 data-page-title tabIndex={-1}>Check your application status</h1>
-          <p className="lede">The capability stays in this browser route and is sent only in the status header.</p>
+          <p className="lede">Your private link opens only this bounded status view.</p>
         </header>
         {statusLoadState === 'loading' ? (
           <StatePanel state="loading" entityLabel="founder status" />
@@ -211,10 +268,13 @@ export function FounderIntake({
     )
   }
 
+  const companyError = errors.find((error) => error === 'Enter the company name.')
+  const deckErrors = errors.filter((error) => error !== 'Enter the company name.')
+
   return (
     <div className="page page--narrow">
       <header className="apply-hero">
-        <div className="apply-hero__icon"><Inbox aria-hidden="true" /></div>
+        <div className="apply-hero__icon"><InboxOutlined aria-hidden="true" /></div>
         <p className="eyebrow">Founder application · minimum intake</p>
         <h1 data-page-title tabIndex={-1}>Start with your company and deck</h1>
         <p className="lede">
@@ -227,75 +287,125 @@ export function FounderIntake({
         <FounderStatusCard status={status} receipt={receipt} />
       ) : (
         <div className="intake-layout">
-          <form className="intake-form" onSubmit={submit} noValidate>
-            {(errors.length > 0 || submitError) && (
-              <div className="error-summary" role="alert" tabIndex={-1} ref={errorSummaryRef}>
-                <h2>{submitError ? 'Application not submitted' : 'Check the application'}</h2>
-                {submitError && <p>{submitError} Your entries and retry key were preserved.</p>}
-                {errors.length > 0 && <ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul>}
-              </div>
-            )}
-
-            <div className="field-group">
-              <label htmlFor="company-name">Company name <span aria-hidden="true">*</span></label>
-              <input
-                id="company-name"
-                name="companyName"
-                value={companyName}
-                onChange={(event) => setCompanyName(event.target.value)}
-                autoComplete="organization"
-                required
-              />
-            </div>
-
-            <div className="field-group">
-              <label htmlFor="deck">Pitch deck (PDF) <span aria-hidden="true">*</span></label>
-              <div className="file-drop">
-                <UploadCloud aria-hidden="true" />
-                <div>
-                  <strong>{deck ? deck.name : 'Choose a PDF deck'}</strong>
-                  <span>{deck ? `${(deck.size / 1024 / 1024).toFixed(1)} MiB selected` : 'Maximum 10 MiB'}</span>
+          <Card className="intake-form-card">
+            <Form
+              className="intake-form"
+              layout="vertical"
+              onSubmitCapture={submit}
+              noValidate
+              aria-busy={submitting}
+            >
+              {(errors.length > 0 || submitError) && (
+                <div className="error-summary" role="alert" tabIndex={-1} ref={errorSummaryRef}>
+                  <Alert
+                    type="error"
+                    showIcon
+                    title={<h2>{submitError ? 'Application not submitted' : 'Check the application'}</h2>}
+                    description={
+                      <div>
+                        {submitError && <p>{submitError} Your entries and retry key were preserved.</p>}
+                        {errors.length > 0 && <ul>{errors.map((error) => <li key={error}>{error}</li>)}</ul>}
+                      </div>
+                    }
+                  />
                 </div>
-                <input
-                  id="deck"
-                  name="deck"
-                  type="file"
-                  accept="application/pdf,.pdf"
+              )}
+
+              <Form.Item label="Company name" htmlFor="company-name" required>
+                <Input
+                  id="company-name"
+                  name="companyName"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  autoComplete="organization"
+                  aria-invalid={Boolean(companyError)}
+                  aria-describedby={companyError ? 'company-name-error' : undefined}
                   required
-                  onChange={(event) => {
-                    setDeck(event.target.files?.[0] ?? null)
-                    setErrors([])
-                  }}
                 />
-              </div>
-            </div>
+                {companyError && <p id="company-name-error" className="field-error">{companyError}</p>}
+              </Form.Item>
 
-            <div className="authorization-note">
-              <ShieldCheck aria-hidden="true" />
-              <p>
-                By submitting, you confirm you are authorized to share this deck for investment
-                review. Founder-private evidence stays distinct from public and investor-internal sources.
-              </p>
-            </div>
+              <Form.Item
+                label="Pitch deck (PDF)"
+                htmlFor="deck"
+                required
+                extra="Maximum 10 MiB"
+              >
+                <div className="native-file-control">
+                  <UploadOutlined aria-hidden="true" />
+                  <input
+                    id="deck"
+                    name="deck"
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    aria-invalid={deckErrors.length > 0}
+                    aria-describedby={`deck-help${deckErrors.length > 0 ? ' deck-error' : ''}`}
+                    onChange={(event) => {
+                      setDeck(event.target.files?.[0] ?? null)
+                      setErrors([])
+                    }}
+                    required
+                  />
+                  <p id="deck-help" className="upload-hint">
+                    {deck ? `${deck.name} · ${(deck.size / 1024 / 1024).toFixed(1)} MiB selected` : 'PDF only · Maximum 10 MiB'}
+                  </p>
+                  {deckErrors.length > 0 && (
+                    <p id="deck-error" className="field-error">{deckErrors.join(' ')}</p>
+                  )}
+                </div>
+              </Form.Item>
 
-            <button className="button button--primary button--large" type="submit" disabled={submitting}>
-              {submitting ? 'Storing application…' : 'Submit application'}
-            </button>
-            <p className="form-footnote"><LockKeyhole aria-hidden="true" /> Submission does not imply approval or funding.</p>
-          </form>
+              <Alert
+                className="authorization-note"
+                type="info"
+                showIcon
+                icon={<SafetyCertificateOutlined />}
+                title="Authorized deck sharing"
+                description="By submitting, you confirm you are authorized to share this deck for the review described here. Your upload stays private."
+              />
 
-          <aside className="intake-assurance" aria-labelledby="what-happens-title">
-            <h2 id="what-happens-title">What happens next</h2>
-            <ol>
-              <li><span>1</span><div><strong>Persist first</strong><p>Your deck and source metadata are stored before processing.</p></div></li>
-              <li><span>2</span><div><strong>Evidence-aware review</strong><p>Claims stay linked to locators; gaps remain Unknown.</p></div></li>
-              <li><span>3</span><div><strong>Bounded status</strong><p>Your private link shows receipt, stage, timing, and focused requests only.</p></div></li>
-            </ol>
-            <div className="privacy-note">
-              <LockKeyhole aria-hidden="true" />
-              <p>Investor scores, other opportunities, and internal notes never appear in founder status.</p>
-            </div>
-          </aside>
+              <Button
+                type="primary"
+                htmlType="submit"
+                size="large"
+                loading={submitting}
+                aria-label="Submit application"
+                block
+              >
+                {submitting ? 'Storing application…' : 'Submit application'}
+              </Button>
+              <p className="form-footnote"><LockOutlined /> Submission does not imply approval or funding.</p>
+            </Form>
+          </Card>
+
+          <Card className="intake-assurance" title="What happens next">
+            <Steps
+              orientation="vertical"
+              current={0}
+              items={[
+                {
+                  title: 'Persist first',
+                  content: 'Your deck and source metadata are stored before processing.',
+                },
+                {
+                  title: 'Evidence-aware review',
+                  content: 'The review keeps sourced facts and unresolved gaps distinct.',
+                },
+                {
+                  title: 'Bounded status',
+                  content: 'Your private link shows receipt, stage, timing, and focused requests only.',
+                },
+              ]}
+            />
+            <Alert
+              className="privacy-note"
+              type="warning"
+              showIcon
+              icon={<LockOutlined />}
+              title="Private status boundary"
+              description="Other applications and internal review details never appear in your status view."
+            />
+          </Card>
         </div>
       )}
     </div>

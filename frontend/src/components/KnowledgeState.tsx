@@ -1,4 +1,10 @@
-import { AlertTriangle, CircleHelp, EyeOff, MinusCircle } from 'lucide-react'
+import {
+  EyeInvisibleOutlined,
+  MinusCircleOutlined,
+  QuestionCircleOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
+import { Alert, Typography } from 'antd'
 import type { KnowledgeValue } from '../api/types'
 import { StatusBadge } from './StatusBadge'
 
@@ -17,7 +23,7 @@ export function KnowledgeState<T>({
 }: KnowledgeStateProps<T>) {
   if (value.state === 'known') {
     return compact ? (
-      <span>{format(value.value)}</span>
+      <Typography.Text>{format(value.value)}</Typography.Text>
     ) : (
       <div className="knowledge knowledge--known">
         <StatusBadge tone="positive">Known</StatusBadge>
@@ -28,7 +34,11 @@ export function KnowledgeState<T>({
 
   if (compact) {
     if (value.state === 'conflicted') {
-      return <span className="knowledge-inline knowledge-inline--conflicted">Conflicted — {value.reason}</span>
+      return (
+        <Typography.Text className="knowledge-inline knowledge-inline--conflicted" type="danger">
+          Conflicted — {value.reason}
+        </Typography.Text>
+      )
     }
     const compactLabels = {
       unknown: 'Unknown',
@@ -36,26 +46,33 @@ export function KnowledgeState<T>({
       not_applicable: 'Not applicable',
     } as const
     return (
-      <span className={`knowledge-inline knowledge-inline--${value.state}`}>
+      <Typography.Text className={`knowledge-inline knowledge-inline--${value.state}`} type="secondary">
         {compactLabels[value.state]} — {value.reason}
-      </span>
+      </Typography.Text>
     )
   }
 
   if (value.state === 'conflicted') {
     return (
-      <div className="knowledge knowledge--conflicted">
-        <StatusBadge tone="critical">Conflicted</StatusBadge>
-        <p>{value.reason}</p>
-        <ul>
-          {value.alternatives.map((alternative) => (
-            <li key={`${format(alternative.value)}-${alternative.evidenceIds.join('-')}`}>
-              {format(alternative.value)}
-              <span className="muted"> · {alternative.evidenceIds.length} evidence item(s)</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <Alert
+        className="knowledge knowledge--conflicted"
+        type="error"
+        showIcon
+        title={<StatusBadge tone="critical">Conflicted</StatusBadge>}
+        description={
+          <div>
+            <p>{value.reason}</p>
+            <ul>
+              {value.alternatives.map((alternative) => (
+                <li key={`${format(alternative.value)}-${alternative.evidenceIds.join('-')}`}>
+                  {format(alternative.value)}
+                  <span className="muted"> · {alternative.evidenceIds.length} evidence item(s)</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        }
+      />
     )
   }
 
@@ -66,20 +83,29 @@ export function KnowledgeState<T>({
   } as const
 
   const Icon =
-    value.state === 'unknown' ? CircleHelp : value.state === 'not_disclosed' ? EyeOff : MinusCircle
+    value.state === 'unknown'
+      ? QuestionCircleOutlined
+      : value.state === 'not_disclosed'
+        ? EyeInvisibleOutlined
+        : MinusCircleOutlined
 
   return (
-    <div className={`knowledge knowledge--${value.state}`}>
-      <span className="knowledge__label">
-        <Icon aria-hidden="true" />
-        {labels[value.state]}
-      </span>
-      <span>{value.reason}</span>
-      {value.evidenceIds.length > 0 && (
-        <span className="muted">
-          <AlertTriangle aria-hidden="true" /> {value.evidenceIds.length} related evidence item(s)
-        </span>
-      )}
-    </div>
+    <Alert
+      className={`knowledge knowledge--${value.state}`}
+      type="info"
+      showIcon
+      icon={<Icon aria-hidden="true" />}
+      title={labels[value.state]}
+      description={
+        <div>
+          <span>{value.reason}</span>
+          {value.evidenceIds.length > 0 && (
+            <span className="muted knowledge__evidence-count">
+              <WarningOutlined aria-hidden="true" /> {value.evidenceIds.length} related evidence item(s)
+            </span>
+          )}
+        </div>
+      }
+    />
   )
 }

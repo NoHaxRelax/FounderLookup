@@ -1,31 +1,50 @@
 import {
-  AlertTriangle,
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
-  BookOpenCheck,
-  CircleHelp,
-  Clock3,
-  FileSearch,
-  Fingerprint,
-  ShieldCheck,
-} from 'lucide-react'
+  ArrowDownOutlined,
+  ArrowRightOutlined,
+  ArrowUpOutlined,
+  BookOutlined,
+  ClockCircleOutlined,
+  FileSearchOutlined,
+  IdcardOutlined,
+  PlayCircleOutlined,
+  QuestionCircleOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
+import {
+  Alert,
+  Button,
+  Card,
+  Collapse,
+  Descriptions,
+  Progress,
+  Space,
+  Statistic,
+  Tag,
+  Timeline,
+  Typography,
+} from 'antd'
 import { useState } from 'react'
 import type {
   AxisSummary,
   ClaimItem,
   EvidenceItem,
+  FounderLookupClient,
   OpportunityDetail as OpportunityDetailModel,
   ViewState,
 } from '../api/types'
 import { EvidenceDialog } from '../components/EvidenceDialog'
 import { KnowledgeState } from '../components/KnowledgeState'
+import { PublicContactPanel } from '../components/PublicContactPanel'
 import { StatePanel } from '../components/StatePanel'
 import { StatusBadge, type BadgeTone } from '../components/StatusBadge'
 
 interface OpportunityDetailProps {
+  client: FounderLookupClient
   opportunity: OpportunityDetailModel
   previewState: ViewState
+  announce: (message: string) => void
 }
 
 const axisTone = (axis: AxisSummary): BadgeTone => {
@@ -43,273 +62,323 @@ const claimTone: Record<ClaimItem['status'], BadgeTone> = {
 }
 
 const trendIcon = (trend: AxisSummary['trend']) => {
-  if (trend === 'improving') return <ArrowUpRight aria-hidden="true" />
-  if (trend === 'declining') return <ArrowDownRight aria-hidden="true" />
-  if (trend === 'unknown') return <CircleHelp aria-hidden="true" />
-  return <ArrowRight aria-hidden="true" />
+  if (trend === 'improving') return <ArrowUpOutlined aria-hidden="true" />
+  if (trend === 'declining') return <ArrowDownOutlined aria-hidden="true" />
+  if (trend === 'unknown') return <QuestionCircleOutlined aria-hidden="true" />
+  return <ArrowRightOutlined aria-hidden="true" />
 }
 
-export function OpportunityDetail({ opportunity, previewState }: OpportunityDetailProps) {
+export function OpportunityDetail({
+  client,
+  opportunity,
+  previewState,
+  announce,
+}: OpportunityDetailProps) {
+  const [record, setRecord] = useState(opportunity)
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null)
-  const evidenceById = new Map(opportunity.evidence.map((item) => [item.id, item]))
-  const readinessBlocked = opportunity.screeningCase.readiness === 'blocked'
+  const [runningCommand, setRunningCommand] = useState<'screen' | 'retry' | null>(null)
+  const [commandError, setCommandError] = useState('')
+  const evidenceById = new Map(record.evidence.map((item) => [item.id, item]))
+  const readinessBlocked = record.screeningCase.readiness === 'blocked'
+  const blockingContradictions = record.contradictions.filter((item) => item.blocking)
+  const retryableRun = record.pipelineRuns.find((run) => run.failures.some((failure) => failure.retryable))
+
+  const screenOpportunity = async () => {
+    setRunningCommand('screen')
+    setCommandError('')
+    try {
+      const result = await client.screenOpportunity(record.id)
+      setRecord(result.opportunity)
+      announce(`Screening run ${result.run.status}. Accepted evidence remains available.`)
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : 'Screening could not start.')
+      announce('Screening was not started. Existing Opportunity data is unchanged.')
+    } finally {
+      setRunningCommand(null)
+    }
+  }
+
+  const retryRun = async () => {
+    if (!retryableRun) return
+    setRunningCommand('retry')
+    setCommandError('')
+    try {
+      const result = await client.retryOpportunityRun(record.id, retryableRun.id)
+      setRecord(result.opportunity)
+      announce(`Retry run ${result.run.status}. Previously accepted outputs were preserved.`)
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : 'The run could not be retried.')
+      announce('The run was not retried. Previously accepted outputs remain unchanged.')
+    } finally {
+      setRunningCommand(null)
+    }
+  }
 
   if (previewState !== 'ready' && previewState !== 'blocked') {
     return (
       <div className="page">
         <header className="page-header">
-          <div>
-            <p className="eyebrow">Opportunity</p>
-            <h1 data-page-title tabIndex={-1}>{opportunity.company.name}</h1>
-          </div>
+          <div><p className="eyebrow">Opportunity</p><h1 data-page-title tabIndex={-1}>{record.company.name}</h1></div>
         </header>
         <StatePanel state={previewState} entityLabel="opportunity assessment" />
       </div>
     )
   }
 
+  const auditContent = (
+    <div className="audit-stack">
+      <section aria-labelledby="stable-identity-title">
+        <h3 id="stable-identity-title"><IdcardOutlined aria-hidden="true" /> Stable assessment identity</h3>
+        <Descriptions
+          size="small"
+          column={{ xs: 1, sm: 2 }}
+          items={[
+            { key: 'opportunity', label: 'Opportunity', children: <Typography.Text code>{record.id}</Typography.Text> },
+            { key: 'assessment', label: 'Assessment', children: <Typography.Text code>{record.assessmentId}</Typography.Text> },
+            { key: 'snapshot', label: 'Input snapshot', children: <Typography.Text code>{record.inputSnapshotId}</Typography.Text> },
+            { key: 'thesis', label: 'Thesis', children: <Typography.Text code>{record.thesisVersion}</Typography.Text> },
+          ]}
+        />
+      </section>
+
+      <section aria-labelledby="claims-title">
+        <div className="section-heading">
+          <h3 id="claims-title">Material Claims, Trust, and Evidence</h3>
+          <StatusBadge tone="info">{record.claims.length} claims</StatusBadge>
+        </div>
+        {record.claims.length === 0 ? (
+          <StatePanel state="empty" entityLabel="material claims" />
+        ) : (
+          <ul className="claims-list">
+            {record.claims.map((claim) => (
+              <li key={claim.id}>
+                <article className="claim-card">
+                  <Card className="claim-card__surface" title={<h3>{claim.statement}</h3>}>
+                    <Space wrap>
+                      <StatusBadge tone={claimTone[claim.status]}>{claim.status.replaceAll('_', ' ')}</StatusBadge>
+                      <Typography.Text code>{claim.id}</Typography.Text>
+                    </Space>
+                    <p>{claim.verificationLabel}</p>
+                    <Collapse
+                      items={[
+                        {
+                          key: 'trust',
+                          label: (
+                            <span>
+                              <SafetyCertificateOutlined aria-hidden="true" /> Trust factors ·{' '}
+                              {claim.trust.state === 'scored' ? `${claim.trust.score}/100` : claim.trust.state}
+                            </span>
+                          ),
+                          children: (
+                            <div className="details-body">
+                              <p>
+                                {claim.trust.state === 'scored'
+                                  ? `${claim.trust.score}/100 Claim Trust — never founder quality.`
+                                  : `${claim.trust.state} — ${claim.trust.reason}`}
+                              </p>
+                              <ul className="factor-list">
+                                {claim.trust.factors.map((factor) => (
+                                  <li key={`${factor.label}-${factor.signal}`}>
+                                    <Space align="start">
+                                      <StatusBadge tone={factor.signal === 'strengthens' ? 'positive' : factor.signal === 'weakens' ? 'critical' : 'neutral'}>
+                                        {factor.signal}
+                                      </StatusBadge>
+                                      <span><strong>{factor.label}:</strong> {factor.rationale}</span>
+                                    </Space>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
+                    <div className="evidence-buttons" aria-label={`Evidence for claim: ${claim.statement}`}>
+                      {[...claim.supportingEvidenceIds, ...claim.counterEvidenceIds].map((evidenceId) => {
+                        const evidence = evidenceById.get(evidenceId)
+                        if (!evidence) return null
+                        const counter = claim.counterEvidenceIds.includes(evidenceId)
+                        return (
+                          <Button
+                            className="evidence-button"
+                            danger={counter}
+                            icon={<FileSearchOutlined aria-hidden="true" />}
+                            key={evidenceId}
+                            aria-label={`${counter ? 'Counter-evidence' : 'Evidence'} ${evidence.locator.label}`}
+                            onClick={() => setSelectedEvidence(evidence)}
+                          >
+                            {counter ? 'Counter-evidence' : 'Evidence'} · {evidence.locator.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </Card>
+                </article>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="run-history-title">
+        <h3 id="run-history-title">Run history</h3>
+        {record.timeline.length === 0 ? (
+          <p>No run stages were returned.</p>
+        ) : (
+          <Timeline
+            items={record.timeline.map((stage) => ({
+              color: stage.status === 'succeeded' ? 'green' : stage.status === 'failed' ? 'red' : 'orange',
+              content: (
+                <div className="timeline-stage">
+                  <div className="timeline-heading">
+                    <strong>{stage.label}</strong>
+                    <StatusBadge tone={stage.status === 'succeeded' ? 'positive' : stage.status === 'failed' ? 'critical' : 'warning'}>
+                      {stage.status}
+                    </StatusBadge>
+                  </div>
+                  <p>{stage.detail}</p>
+                  <Typography.Text type="secondary"><ClockCircleOutlined /> {stage.timing}</Typography.Text>
+                  {stage.externalWait && <Typography.Text type="secondary">External wait is separate from compute time.</Typography.Text>}
+                </div>
+              ),
+            }))}
+          />
+        )}
+      </section>
+    </div>
+  )
+
   return (
     <div className="page">
-      <header className="page-header page-header--bordered">
+      <header className="page-header">
         <div>
-          <div className="cluster">
-            <StatusBadge tone="info">{opportunity.origin}</StatusBadge>
-            <StatusBadge tone="warning">{opportunity.screeningCase.status}</StatusBadge>
-          </div>
-          <p className="eyebrow">Opportunity detail</p>
-          <h1 data-page-title tabIndex={-1}>{opportunity.company.name}</h1>
+          <Space wrap size="small">
+            <StatusBadge tone="info">{record.origin}</StatusBadge>
+            <StatusBadge tone="warning">{record.screeningCase.status}</StatusBadge>
+          </Space>
+          <p className="eyebrow">Opportunity</p>
+          <h1 data-page-title tabIndex={-1}>{record.company.name}</h1>
           <p className="lede">
-            <KnowledgeState value={opportunity.founder.name} compact /> ·{' '}
-            <KnowledgeState value={opportunity.company.sector} compact /> ·{' '}
-            <KnowledgeState value={opportunity.company.geography} compact />
+            <KnowledgeState value={record.founder.name} compact /> ·{' '}
+            <KnowledgeState value={record.company.sector} compact /> ·{' '}
+            <KnowledgeState value={record.company.geography} compact />
           </p>
         </div>
-        <a className="button button--secondary" href="#/memo">
-          <BookOpenCheck aria-hidden="true" /> Review memo
-        </a>
+        <Button href={`#/memo/${encodeURIComponent(record.id)}`} icon={<BookOutlined aria-hidden="true" />} size="large">
+          Review memo &amp; decide
+        </Button>
       </header>
 
-      <details className="identity-strip">
-        <summary><Fingerprint aria-hidden="true" /> Stable assessment identity</summary>
-        <dl className="metadata-list metadata-list--inline">
-          <div><dt>Opportunity</dt><dd><code>{opportunity.id}</code></dd></div>
-          <div><dt>Assessment</dt><dd><code>{opportunity.assessmentId}</code></dd></div>
-          <div><dt>Input snapshot</dt><dd><code>{opportunity.inputSnapshotId}</code></dd></div>
-          <div><dt>Thesis</dt><dd><code>{opportunity.thesisVersion}</code></dd></div>
-        </dl>
-      </details>
-
-      <section className={`readiness-banner ${readinessBlocked ? '' : 'readiness-banner--neutral'}`} aria-labelledby="readiness-heading">
-        {readinessBlocked ? <AlertTriangle aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
-        <div>
-          <p className="eyebrow">
-            Decision readiness · {opportunity.screeningCase.readiness.replaceAll('_', ' ')}
-          </p>
-          <h2 id="readiness-heading">
-            {readinessBlocked
-              ? 'Human resolution required'
-              : opportunity.screeningCase.readiness === 'not_evaluated'
-                ? 'Readiness has not been evaluated'
-                : 'Review the current readiness record'}
-          </h2>
-          <p>{opportunity.screeningCase.readinessReason}</p>
+      <section className="opportunity-act" aria-labelledby="opportunity-act-title">
+        <p className="eyebrow">Act</p>
+        <div className="decision-summary-grid">
+          <Card className="recommendation-card">
+            <StatusBadge tone={readinessBlocked ? 'warning' : 'positive'}>
+              Readiness {record.screeningCase.readiness.replaceAll('_', ' ')}
+            </StatusBadge>
+            <h2 id="opportunity-act-title">{record.recommendation.action.replaceAll('_', ' ')}</h2>
+            <p>{record.recommendation.summary}</p>
+            <p className="muted">System Recommendation · awaiting an explicit human Decision.</p>
+          </Card>
+          <Card className="blocker-summary" title={`Material blockers (${blockingContradictions.length})`}>
+            {blockingContradictions.length > 0 ? (
+              <ul>
+                {blockingContradictions.map((contradiction) => <li key={contradiction.id}>{contradiction.summary}</li>)}
+              </ul>
+            ) : (
+              <p>No blocking contradiction was returned. This is not proof that evidence is complete.</p>
+            )}
+            <p>{record.screeningCase.readinessReason}</p>
+          </Card>
+        </div>
+        {commandError && <Alert type="error" showIcon title="Command not completed" description={commandError} />}
+        <div className="opportunity-actions">
+          <Button type="primary" icon={<PlayCircleOutlined aria-hidden="true" />} loading={runningCommand === 'screen'} onClick={screenOpportunity}>
+            Run full Screening
+          </Button>
+          {retryableRun && (
+            <Button icon={<ReloadOutlined aria-hidden="true" />} loading={runningCommand === 'retry'} onClick={retryRun}>
+              Retry failed stage
+            </Button>
+          )}
         </div>
       </section>
 
-      {previewState === 'blocked' && (
-        <StatePanel state="blocked" entityLabel="opportunity assessment" />
-      )}
+      {previewState === 'blocked' && <StatePanel state="blocked" entityLabel="opportunity assessment" />}
 
-      <section className="assessment-overview" aria-labelledby="assessment-overview-title">
+      <section className="assessment-overview" aria-labelledby="assessment-overview-title" aria-label="Founder score and three axes">
         <div className="section-heading">
-          <div>
-            <p className="eyebrow">Assessment · independent views</p>
-            <h2 id="assessment-overview-title">Founder score and three axes</h2>
-          </div>
-          <p className="muted">Axes are not averaged into the founder score.</p>
+          <div><p className="eyebrow">Decision summary</p><h2 id="assessment-overview-title">Founder Score and three independent axes</h2></div>
+          <Typography.Text type="secondary">The axes are never averaged into the Founder Score.</Typography.Text>
         </div>
-
         <div className="score-and-axes">
-          <article className="founder-score-card">
-            <p className="eyebrow">Founder score</p>
-            {opportunity.founderScore.state === 'known' ? (
+          <Card className="founder-score-card" title="Founder Score · persistent across Opportunities">
+            {record.founderScore.state === 'known' ? (
               <>
-                <div className="score-number">
-                  <strong>{opportunity.founderScore.value.score}</strong><span>/100</span>
-                </div>
+                <Statistic value={record.founderScore.value.score} suffix="/100" />
                 <StatusBadge tone="warning">
-                  {opportunity.founderScore.value.provisional ? 'Provisional' : 'Final'} ·{' '}
-                  {opportunity.founderScore.value.uncertainty} uncertainty
+                  {record.founderScore.value.provisional ? 'Provisional' : 'Established'} · {record.founderScore.value.uncertainty} uncertainty
                 </StatusBadge>
-                <p>{opportunity.founderScore.value.explanation}</p>
-                <small>{opportunity.founderScore.value.coverageLabel}</small>
+                <p>{record.founderScore.value.coverageLabel}</p>
               </>
-            ) : (
-              <KnowledgeState value={opportunity.founderScore} />
-            )}
-          </article>
-
+            ) : <KnowledgeState value={record.founderScore} />}
+          </Card>
           <div className="axes-grid">
-            {opportunity.axes.map((axis) => (
-              <article className="axis-card" key={axis.key}>
-                <div className="axis-card__heading">
-                  <h3>{axis.label}</h3>
-                  <StatusBadge tone={axisTone(axis)}>{axis.rating}</StatusBadge>
-                </div>
+            {record.axes.map((axis) => (
+              <Card className="axis-card" key={axis.key} title={<h3>{axis.label}</h3>} extra={<StatusBadge tone={axisTone(axis)}>{axis.rating}</StatusBadge>}>
                 <p className="trend-line">{trendIcon(axis.trend)} {axis.trendLabel}</p>
                 <p>{axis.coverageLabel}</p>
-                <KnowledgeState
-                  value={axis.confidence}
-                  format={(value) => `${Math.round(value * 100)}% confidence`}
-                />
-                <details>
-                  <summary>Open questions ({axis.openQuestions.length})</summary>
-                  <ul>
-                    {axis.openQuestions.map((question) => <li key={question}>{question}</li>)}
-                  </ul>
-                </details>
-              </article>
+                {axis.confidence.state === 'known' ? (
+                  <Progress percent={Math.round(axis.confidence.value * 100)} status="normal" aria-label={`${Math.round(axis.confidence.value * 100)}% confidence`} />
+                ) : <KnowledgeState value={axis.confidence} />}
+                <p className="muted">{axis.openQuestions.length} open question(s)</p>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
-      <div className="opportunity-grid">
-        <section aria-labelledby="claims-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Claims · Trust · Evidence</p>
-              <h2 id="claims-title">Material claims</h2>
-            </div>
-            <StatusBadge tone="info">{opportunity.claims.length} claims</StatusBadge>
-          </div>
-          {opportunity.claims.length === 0 ? (
-            <StatePanel state="empty" entityLabel="material claims" />
-          ) : (
-            <div className="claims-list">
-              {opportunity.claims.map((claim) => (
-              <article className="claim-card" key={claim.id}>
-                <header>
-                  <StatusBadge tone={claimTone[claim.status]}>{claim.status.replaceAll('_', ' ')}</StatusBadge>
-                  <code>{claim.id}</code>
-                </header>
-                <h3>{claim.statement}</h3>
-                <p>{claim.verificationLabel}</p>
+      {record.origin === 'outbound' && (
+        <PublicContactPanel
+          routes={record.publicContactRoutes}
+          loopAudit={record.sourcingLoopAudit}
+        />
+      )}
 
-                <details>
-                  <summary><ShieldCheck aria-hidden="true" /> Trust rationale</summary>
-                  <div className="details-body">
-                    {claim.trust.state === 'scored' ? (
-                      <p><strong>{claim.trust.score}/100</strong> claim trust — not founder quality.</p>
-                    ) : (
-                      <p><strong>{claim.trust.state}</strong> — {claim.trust.reason}</p>
-                    )}
-                    <ul className="factor-list">
-                      {claim.trust.factors.map((factor) => (
-                        <li key={`${claim.id}-${factor.label}`}>
-                          <StatusBadge
-                            tone={factor.signal === 'strengthens' ? 'positive' : factor.signal === 'weakens' ? 'critical' : 'neutral'}
-                          >
-                            {factor.signal}
-                          </StatusBadge>
-                          <span><strong>{factor.label}:</strong> {factor.rationale}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </details>
-
-                <div className="evidence-buttons" aria-label={`Evidence for claim: ${claim.statement}`}>
-                  {[...claim.supportingEvidenceIds, ...claim.counterEvidenceIds].map((evidenceId) => {
-                    const evidence = evidenceById.get(evidenceId)
-                    if (!evidence) return null
-                    const counter = claim.counterEvidenceIds.includes(evidenceId)
-                    return (
-                      <button
-                        className={`evidence-button ${counter ? 'evidence-button--counter' : ''}`}
-                        type="button"
-                        key={evidenceId}
-                        onClick={() => setSelectedEvidence(evidence)}
-                      >
-                        <FileSearch aria-hidden="true" />
-                        <span>{counter ? 'Counter-evidence' : 'Evidence'}<small>{evidence.locator.label}</small></span>
-                      </button>
-                    )
-                  })}
+      <section className="progressive-stack" aria-label="Opportunity explanation and audit detail">
+        <Collapse
+          items={[
+            {
+              key: 'understand',
+              label: <span><QuestionCircleOutlined aria-hidden="true" /> Understand the Recommendation</span>,
+              extra: <Tag>{record.recommendation.reasons.length} reasons · {record.diligenceActions.length} gaps</Tag>,
+              children: (
+                <div className="understand-grid">
+                  <div><h3>Why</h3><ul>{record.recommendation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
+                  <div><h3>Next actions</h3><ol>{record.recommendation.nextActions.map((action) => <li key={action}>{action}</li>)}</ol></div>
+                  {record.founderScore.state === 'known' && <p>{record.founderScore.value.explanation}</p>}
+                  {record.contradictions.map((contradiction) => (
+                    <Alert
+                      key={contradiction.id}
+                      type={contradiction.blocking ? 'warning' : 'info'}
+                      showIcon
+                      icon={<WarningOutlined />}
+                      title={contradiction.summary}
+                      description={`Smallest next action: ${contradiction.smallestNextAction}`}
+                    />
+                  ))}
                 </div>
-              </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <aside className="diligence-rail">
-          {opportunity.contradictions.length === 0 ? (
-            <section className="soft-panel" aria-labelledby="contradiction-title">
-              <div className="details-body">
-                <p className="eyebrow">Contradictions</p>
-                <h2 id="contradiction-title">No contradiction records in this response</h2>
-                <p>This does not prove the evidence is conflict-free; it means none were returned.</p>
-              </div>
-            </section>
-          ) : (
-            <section className="contradiction-panel" aria-labelledby="contradiction-title">
-              <div className="panel-icon"><AlertTriangle aria-hidden="true" /></div>
-              <p className="eyebrow">Blocking contradiction</p>
-              <h2 id="contradiction-title">Material claims need resolution</h2>
-              {opportunity.contradictions.map((contradiction) => (
-              <div key={contradiction.id}>
-                <p>{contradiction.summary}</p>
-                <h3>Smallest next action</h3>
-                <p>{contradiction.smallestNextAction}</p>
-                <div className="cluster cluster--small">
-                  {contradiction.evidenceIds.map((evidenceId) => {
-                    const evidence = evidenceById.get(evidenceId)
-                    return evidence ? (
-                      <button
-                        className="button button--quiet"
-                        type="button"
-                        key={evidenceId}
-                        onClick={() => setSelectedEvidence(evidence)}
-                      >
-                        View {evidence.locator.label}
-                      </button>
-                    ) : null
-                  })}
-                </div>
-              </div>
-              ))}
-            </section>
-          )}
-
-          <section className="soft-panel run-timeline" aria-labelledby="timeline-title">
-            <div className="details-body">
-              <p className="eyebrow">Processing visibility</p>
-              <h2 id="timeline-title">Run timeline</h2>
-              <ol>
-                {opportunity.timeline.map((stage) => (
-                  <li key={stage.id} className={`timeline-stage timeline-stage--${stage.status}`}>
-                    <span className="timeline-marker" aria-hidden="true" />
-                    <div>
-                      <div className="timeline-heading">
-                        <strong>{stage.label}</strong>
-                        <StatusBadge
-                          tone={stage.status === 'succeeded' ? 'positive' : stage.status === 'failed' ? 'critical' : 'warning'}
-                        >
-                          {stage.status}
-                        </StatusBadge>
-                      </div>
-                      <p>{stage.detail}</p>
-                      <small><Clock3 aria-hidden="true" /> {stage.timing}</small>
-                      {stage.externalWait && <small>External wait is separate from compute time.</small>}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </section>
-        </aside>
-      </div>
+              ),
+            },
+            {
+              key: 'audit',
+              label: <span><SafetyCertificateOutlined aria-hidden="true" /> Audit Claims, Evidence, Trust, and runs</span>,
+              extra: <Tag>{record.claims.length} claims · {record.evidence.length} evidence · {record.runIds.length} runs</Tag>,
+              children: auditContent,
+            },
+          ]}
+        />
+      </section>
 
       <EvidenceDialog evidence={selectedEvidence} onClose={() => setSelectedEvidence(null)} />
     </div>

@@ -17,10 +17,14 @@ import type {
   MemoSectionKind,
   MemoView,
   OpportunityDetail,
+  OutreachReceipt,
+  PipelineRunView,
+  PublicContactRoute,
   QueryPlan,
   RecommendationView,
   SearchFilters,
   SearchResponse,
+  SourcingLoopAudit,
   ThesisCriterion,
   ThesisView,
   TimelineStage,
@@ -41,13 +45,16 @@ import type {
   WireOpportunityCollection,
   WireOpportunityDetail,
   WireOpportunitySummary,
+  WireOutreachRecord,
   WireOutboundCandidate,
   WirePipelineRun,
+  WirePublicContactRoute,
   WireProblemDetails,
   WireQueryPlan,
   WireQueryResult,
   WireRecommendation,
   WireThesisCriterion,
+  WireSourcingLoopAudit,
 } from './wireTypes'
 
 const fieldLabels: Record<TypedQueryCriterion['field'], string> = {
@@ -148,6 +155,8 @@ export function mapThesisRevision(wire: WireInvestmentThesisRevision): ThesisVie
       key,
       label: thesisLabels[key],
       value: formatCriterionValue(criterion),
+      operator: criterion.operator,
+      values: [...criterion.values],
       mode: criterion.mode,
       unknownPolicy: criterion.unknown_policy,
     } satisfies ThesisCriterion
@@ -368,6 +377,56 @@ const mapAssessmentAxes = (assessment: WireAssessmentEnvelope | null) =>
       ]
     : emptyAxes()
 
+const safePublicContactHref = (route: WirePublicContactRoute): string | undefined => {
+  const value = route.value.trim()
+  const candidate = route.href?.trim() ||
+    (route.kind === 'public_email' ? `mailto:${value}` : value)
+  try {
+    const parsed = new URL(candidate)
+    if (route.kind === 'public_email') {
+      if (parsed.protocol !== 'mailto:' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return undefined
+      return decodeURIComponent(parsed.pathname).toLowerCase() === value.toLowerCase()
+        ? parsed.toString()
+        : undefined
+    }
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return undefined
+    return parsed.toString()
+  } catch {
+    return undefined
+  }
+}
+
+export const mapPublicContactRoutes = (
+  routes: WirePublicContactRoute[] | undefined,
+): PublicContactRoute[] =>
+  (routes ?? []).flatMap((route) => {
+    if (route.classification !== 'public') return []
+    return [{
+      id: route.route_id,
+      kind: route.kind === 'contact_url' ? 'contact_page' : route.kind,
+      label: route.label,
+      displayValue: route.value,
+      href: safePublicContactHref(route),
+      sourceArtifactId: route.source_artifact_id,
+      sourceName: route.source_name,
+      sourceLocator: route.source_locator,
+      collectedAt: route.collected_at ?? undefined,
+    }]
+  })
+
+export const mapSourcingLoopAudit = (
+  wire: WireSourcingLoopAudit | undefined,
+): SourcingLoopAudit | undefined =>
+  wire
+    ? {
+        status: wire.status,
+        roundsCompleted: wire.rounds_completed,
+        roundLimit: wire.round_limit ?? undefined,
+        stopReason: wire.stop_reason,
+        runId: wire.run_id ?? undefined,
+      }
+    : undefined
+
 export function mapOutboundCandidate(wire: WireOutboundCandidate): CandidateSummary {
   const assessment = wire.preliminary_assessment
   const missingFields = assessment?.coverage.missing_fields ?? []
@@ -400,6 +459,10 @@ export function mapOutboundCandidate(wire: WireOutboundCandidate): CandidateSumm
         : wire.status === 'activated'
           ? 'activated'
           : 'not_activated',
+    publicContactRoutes: mapPublicContactRoutes(
+      wire.public_contact_routes ?? wire.contact_routes,
+    ),
+    sourcingLoopAudit: mapSourcingLoopAudit(wire.sourcing_audit ?? wire.agent_loop),
   }
 }
 
@@ -586,10 +649,32 @@ const mapRuns = (runs: WirePipelineRun[]): TimelineStage[] =>
     }),
   )
 
+export const mapPipelineRun = (wire: WirePipelineRun): PipelineRunView => ({
+  id: wire.run_id,
+  kind: wire.kind,
+  status: wire.status,
+  queuedAt: wire.queued_at,
+  startedAt: wire.started_at ?? undefined,
+  completedAt: wire.completed_at ?? undefined,
+  acceptedOutputIds: [...(wire.accepted_output_ids ?? [])],
+  failures: wire.failures.map((failure) => ({
+    id: failure.failure_id,
+    stageKey: failure.stage_key,
+    code: failure.safe_code,
+    message: failure.safe_message,
+    retryable: failure.retryable,
+    occurredAt: failure.occurred_at,
+  })),
+  retryOfRunId: wire.retry_of_run_id ?? undefined,
+  attempt: wire.attempt ?? 1,
+  loopAudit: mapSourcingLoopAudit(wire.sourcing_audit ?? wire.agent_loop),
+})
+
 export function mapOpportunityDetail(
   detail: WireOpportunityDetail,
   runs: WirePipelineRun[] = [],
   companyName?: string,
+  outboundCandidate?: WireOutboundCandidate,
 ): OpportunityDetail {
   const assessment = detail.latest_assessment
   const assessmentId = assessment?.assessment_id ?? `assessment-not-evaluated-${detail.opportunity_id}`
@@ -683,7 +768,20 @@ export function mapOpportunityDetail(
     recommendation: mapRecommendation(recommendationWire, detail, assessmentId),
     timeline,
     runIds: [...detail.related_run_ids],
+    pipelineRuns: runs.map(mapPipelineRun),
     decisionReadyForCommand: Boolean(assessment && memoWire && recommendationWire),
+    publicContactRoutes: mapPublicContactRoutes(
+      detail.public_contact_routes ??
+      detail.contact_routes ??
+      outboundCandidate?.public_contact_routes ??
+      outboundCandidate?.contact_routes,
+    ),
+    sourcingLoopAudit: mapSourcingLoopAudit(
+      detail.sourcing_audit ??
+      detail.agent_loop ??
+      outboundCandidate?.sourcing_audit ??
+      outboundCandidate?.agent_loop,
+    ),
   }
 }
 
@@ -877,6 +975,15 @@ export const mapDecision = (wire: WireHumanDecision): DecisionReceipt => ({
   actorId: wire.actor_id,
   actorLabel: `Investor · ${wire.actor_id}`,
   decidedAt: wire.decided_at,
+})
+
+export const mapOutreach = (wire: WireOutreachRecord): OutreachReceipt => ({
+  outreachId: wire.outreach_id,
+  candidateId: wire.outbound_candidate_id,
+  method: wire.method,
+  status: wire.status,
+  actorId: wire.actor_id,
+  occurredAt: wire.occurred_at,
 })
 
 export const mapProblem = (wire: WireProblemDetails, fallbackStatus: number): ApiProblem => ({

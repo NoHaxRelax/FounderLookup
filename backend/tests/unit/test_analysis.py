@@ -60,7 +60,7 @@ from founderlookup.domain.scoring import (
     TrustFactorKind,
     TrustFactorSignal,
 )
-from founderlookup.screening.analysis import (
+from founderlookup.screening.inbound_analysis import (
     AdversarialValidationPort,
     AdversarialValidationResult,
     AnalysisRequest,

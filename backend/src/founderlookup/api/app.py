@@ -33,6 +33,8 @@ from founderlookup.api.schemas import (
     DecisionCommand,
     OutreachCommand,
     QueryCommand,
+    QueryPlannerCommand,
+    SourcingRunCommand,
     ThesisDraftRequest,
 )
 from founderlookup.api.security import (
@@ -55,14 +57,20 @@ from founderlookup.application.models import (
 )
 from founderlookup.application.ports import ApplicationIntakePort, IntakeSubmission
 from founderlookup.application.service import FakeVCBrainService
+from founderlookup.application.sourcing import (
+    SourcingCoordinatorPort,
+    SourcingUnavailableError,
+)
 from founderlookup.domain.assessment import Decision
 from founderlookup.domain.lifecycles import (
     OpportunityOrigin,
     OutboundCandidateStatus,
     ScreeningCaseStatus,
 )
+from founderlookup.domain.query import OpportunityQueryPlan
 from founderlookup.domain.runs import PipelineRun
 from founderlookup.ingestion.intake import DeckTooLargeError
+from founderlookup.screening.query_planner import QueryPlannerPort
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
 _PROBLEM_RESPONSES: dict[int | str, dict[str, object]] = {
@@ -87,6 +95,8 @@ def create_app(
     service: FakeVCBrainService | None = None,
     intake_service: ApplicationIntakePort | None = None,
     application_extraction: Callable[[str], Awaitable[None]] | None = None,
+    sourcing_coordinator: SourcingCoordinatorPort | None = None,
+    query_planner: QueryPlannerPort | None = None,
 ) -> FastAPI:
     """Compose the transport; intake fails closed unless the safe service is wired."""
 
@@ -111,6 +121,9 @@ def create_app(
     application.state.vc_brain_service = vc_brain
     application.state.intake_service = intake_service
     application.state.application_extraction = application_extraction
+    application.state.sourcing_coordinator = sourcing_coordinator
+    application.state.query_planner = query_planner
+    application.state.runtime_environment = configured.environment.value
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(configured.cors_allowed_origins),
@@ -187,6 +200,10 @@ def create_app(
             str,
             Header(alias="Idempotency-Key", min_length=1, max_length=255),
         ],
+        outbound_candidate_id: Annotated[
+            str | None,
+            Form(min_length=1, max_length=128),
+        ] = None,
     ) -> ApplicationReceipt:
         rate_limiter.check(
             bucket="application-intake",
@@ -199,6 +216,11 @@ def create_app(
                 code="safe_intake_unavailable",
                 title="Application intake is temporarily unavailable",
             )
+        canonical_company_id = (
+            vc_brain.canonical_company_for_outbound_application(outbound_candidate_id)
+            if outbound_candidate_id is not None
+            else None
+        )
         content = await deck.read(configured.maximum_deck_bytes + 1)
         if len(content) > configured.maximum_deck_bytes:
             raise DeckTooLargeError
@@ -209,6 +231,7 @@ def create_app(
                 media_type=deck.content_type or "application/octet-stream",
                 deck_content=content,
                 idempotency_key=idempotency_key,
+                canonical_company_id=canonical_company_id,
             )
         except ValidationError as error:
             raise APIProblem(
@@ -221,6 +244,7 @@ def create_app(
             accepted,
             display_name=submission.display_name,
             media_type=submission.media_type,
+            outbound_candidate_id=outbound_candidate_id,
         )
         if application_extraction is not None:
             # Extraction is idempotent after success and may safely resume an interrupted replay.
@@ -312,16 +336,65 @@ def create_app(
         response_model=RunAccepted,
         status_code=status.HTTP_202_ACCEPTED,
         tags=["sourcing"],
-        summary="Start a bounded fake-backed sourcing run",
-        responses=_PROBLEM_RESPONSES,
+        summary="Start a bounded provider-neutral sourcing run",
+        responses={
+            **_PROBLEM_RESPONSES,
+            503: {"model": ProblemDetails, "description": "Live sourcing is disabled"},
+        },
     )
     async def start_sourcing(
         response: Response,
+        background_tasks: BackgroundTasks,
         _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
+        command: SourcingRunCommand | None = None,
     ) -> RunAccepted:
-        accepted = vc_brain.start_sourcing()
+        if sourcing_coordinator is None:
+            accepted = vc_brain.start_sourcing()
+        else:
+            if command is None:
+                raise APIProblem(
+                    status=422,
+                    code="sourcing_command_required",
+                    title="A bounded sourcing command is required",
+                )
+            domain_command = command.to_domain()
+            try:
+                accepted = sourcing_coordinator.enqueue(domain_command)
+            except SourcingUnavailableError as error:
+                raise APIProblem(
+                    status=503,
+                    code="live_sourcing_unavailable",
+                    title="Live public-source discovery is disabled",
+                ) from error
+            background_tasks.add_task(
+                sourcing_coordinator.execute,
+                accepted.run_id,
+                domain_command,
+            )
         response.headers["Location"] = accepted.status_url
         return accepted
+
+    @application.post(
+        "/api/v1/query-plans",
+        response_model=OpportunityQueryPlan,
+        tags=["queries"],
+        summary="Translate one compound investor query into an inspectable plan",
+        responses={
+            **_PROBLEM_RESPONSES,
+            503: {"model": ProblemDetails, "description": "Query planning is unavailable"},
+        },
+    )
+    async def create_query_plan(
+        command: QueryPlannerCommand,
+        _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
+    ) -> OpportunityQueryPlan:
+        if query_planner is None:
+            raise APIProblem(
+                status=503,
+                code="query_planner_unavailable",
+                title="Query planning is temporarily unavailable",
+            )
+        return query_planner.plan(command.to_domain())
 
     @application.get(
         "/api/v1/outbound-candidates",
@@ -442,7 +515,11 @@ def create_app(
                 code="unsupported_expansion",
                 title="Unsupported Opportunity expansion",
             )
-        return vc_brain.get_opportunity(opportunity_id)
+        return vc_brain.get_opportunity(
+            opportunity_id,
+            include_claims="claims" in requested,
+            include_evidence="evidence" in requested,
+        )
 
     @application.post(
         "/api/v1/opportunities/{opportunity_id}/screen",

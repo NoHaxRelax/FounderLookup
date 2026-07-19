@@ -1,7 +1,15 @@
 """Deterministic tests for baseline cross-source identity resolution."""
 
+from datetime import UTC, datetime
+from itertools import count
+
+import pytest
+
 from founderlookup.domain.evidence import SourceCategory
 from founderlookup.ingestion.identity import (
+    IDENTITY_RESOLUTION_VERSION,
+    IdentityLinkAction,
+    IdentityLinkLedger,
     IdentitySignal,
     IdentitySignalKind,
     ResolutionStatus,
@@ -45,6 +53,8 @@ def test_shared_handle_links_records_across_sources() -> None:
     assert entity.confidence == 0.9
     assert entity.source_categories == frozenset({DEV, SOCIAL})
     assert entity.reasons[0].rule == "shared_identifier"
+    assert entity.resolution_version == IDENTITY_RESOLUTION_VERSION
+    assert entity.resolution_id.startswith("identity-resolution:")
 
 
 def test_profile_url_normalization_links_records() -> None:
@@ -103,3 +113,77 @@ def test_single_source_name_resolves_at_low_confidence() -> None:
     assert entities[0].status is ResolutionStatus.RESOLVED
     assert entities[0].confidence == 0.6
     assert entities[0].reasons[0].rule == "single_source"
+
+
+def test_aliases_and_match_evidence_are_preserved_without_choosing_one_name() -> None:
+    signals = [
+        IdentitySignal(
+            kind=IdentitySignalKind.HANDLE,
+            value="ada",
+            source_category=DEV,
+            source_ref="gh:ada",
+            evidence_ids=("evidence:github-handle",),
+        ),
+        IdentitySignal(
+            kind=IdentitySignalKind.NAME,
+            value="Ada L.",
+            source_category=DEV,
+            source_ref="gh:ada",
+            evidence_ids=("evidence:github-name",),
+        ),
+        IdentitySignal(
+            kind=IdentitySignalKind.HANDLE,
+            value="ada",
+            source_category=SOCIAL,
+            source_ref="hn:ada",
+            evidence_ids=("evidence:hn-handle",),
+        ),
+    ]
+
+    first = resolve_identities(signals)[0]
+    second = resolve_identities(tuple(reversed(signals)))[0]
+
+    assert first.aliases == ("ada", "Ada L.")
+    assert first.match_evidence_ids == (
+        "evidence:github-handle",
+        "evidence:github-name",
+        "evidence:hn-handle",
+    )
+    assert first.resolution_id == second.resolution_id
+
+
+def test_human_approved_identity_link_is_append_only_and_reversible() -> None:
+    identifiers = count(1)
+    ledger = IdentityLinkLedger(
+        clock=lambda: datetime(2026, 7, 19, 12, tzinfo=UTC),
+        id_factory=lambda prefix: f"{prefix}:{next(identifiers)}",
+    )
+
+    approval = ledger.approve(
+        left_entity_id="founder:b",
+        right_entity_id="founder:a",
+        actor_id="investor:reviewer",
+        rationale="Public repository links the two source records.",
+        evidence_ids=("evidence:repo-profile",),
+    )
+    reversal = ledger.reverse(
+        approval.link_id,
+        actor_id="investor:reviewer",
+        rationale="Founder correction showed the records belong to different people.",
+    )
+
+    assert approval.action is IdentityLinkAction.APPROVED
+    assert (approval.left_entity_id, approval.right_entity_id) == (
+        "founder:a",
+        "founder:b",
+    )
+    assert reversal.action is IdentityLinkAction.REVERSED
+    assert reversal.reverses_event_id == approval.event_id
+    assert ledger.events == (approval, reversal)
+    assert ledger.active_links == ()
+    with pytest.raises(ValueError, match="not active"):
+        ledger.reverse(
+            approval.link_id,
+            actor_id="investor:reviewer",
+            rationale="Duplicate reversal must fail.",
+        )

@@ -23,6 +23,7 @@ from founderlookup.ingestion.extraction import (
 )
 from founderlookup.ingestion.mistral_ocr import (
     DEFAULT_MISTRAL_OCR_MODEL,
+    MISTRAL_MODELS_ENDPOINT,
     MISTRAL_OCR_ENDPOINT,
     MistralOcrConfigurationError,
     MistralOcrDisabledError,
@@ -201,6 +202,34 @@ def test_direct_stateless_ocr_request_and_structured_response() -> None:
     assert result.pages[1].confidence.minimum.state is KnowledgeState.UNKNOWN
     assert result.usage.pages_processed.value == 2
     assert result.usage.document_size_bytes.value == len(PDF_BYTES)
+
+
+def test_latest_response_alias_is_resolved_to_one_concrete_ocr_4_model() -> None:
+    requests: list[httpx.Request] = []
+    response_payload = _response()
+    response_payload["model"] = DEFAULT_MISTRAL_OCR_MODEL
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "POST":
+            assert str(request.url) == MISTRAL_OCR_ENDPOINT
+            return httpx.Response(200, json=response_payload)
+        assert request.method == "GET"
+        assert str(request.url) == f"{MISTRAL_MODELS_ENDPOINT}/{DEFAULT_MISTRAL_OCR_MODEL}"
+        assert request.content == b""
+        return httpx.Response(
+            200,
+            json={
+                "id": DEFAULT_MISTRAL_OCR_MODEL,
+                "aliases": ["mistral-ocr-4-0", "mistral-ocr-4"],
+            },
+        )
+
+    result = asyncio.run(_extract(settings=_settings(), request=_request(), handler=handler))
+
+    assert [request.method for request in requests] == ["POST", "GET"]
+    assert result.model_version.state is KnowledgeState.KNOWN
+    assert result.model_version.value == "mistral-ocr-4-0"
 
 
 def test_environment_loading_is_explicit_and_secret_is_redacted() -> None:

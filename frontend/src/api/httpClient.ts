@@ -5,9 +5,12 @@ import {
   mapApplicationReceipt,
   mapDecision,
   mapFounderStatus,
+  mapOutreach,
   mapOpportunityDetail,
+  mapPipelineRun,
   mapProblem,
   mapThesisRevision,
+  mapWireExecutablePlan,
   serializeExecutablePlan,
 } from './contractAdapter'
 import type {
@@ -17,13 +20,22 @@ import type {
   ApplicationReceipt,
   DecisionInput,
   DecisionReceipt,
+  DiscoveryInput,
   ExecutableQueryPlan,
   FounderLookupClient,
   FounderStatusView,
+  InvestorAccessController,
   OpportunityDetail,
+  OpportunityCommandResult,
+  OutreachInput,
+  OutreachReceipt,
   SearchInput,
   SearchResponse,
   StableId,
+  ThesisCriterion,
+  ThesisCriterionKey,
+  ThesisView,
+  WorkspaceCommandResult,
   WorkspaceFixture,
 } from './types'
 import type {
@@ -34,10 +46,13 @@ import type {
   WireInvestmentThesisRevision,
   WireOpportunityCollection,
   WireOpportunityDetail,
+  WireOutreachRecord,
   WireOutboundCandidate,
   WirePipelineRun,
   WireProblemDetails,
   WireQueryResult,
+  WireQueryPlan,
+  WireRunAccepted,
 } from './wireTypes'
 
 type CredentialProvider = () => string | undefined | Promise<string | undefined>
@@ -46,10 +61,32 @@ export interface HttpClientOptions {
   /** Full versioned base, for example `http://localhost:8000/api/v1`. */
   baseUrl: string
   getInvestorCredential?: CredentialProvider
+  investorAccess?: InvestorAccessController
   fetchImplementation?: typeof fetch
   createId?: () => string
   now?: () => Date
+  pollIntervalMs?: number
+  maxPollAttempts?: number
+  wait?: (milliseconds: number) => Promise<void>
 }
+
+const TERMINAL_RUN_STATUSES = new Set(['succeeded', 'partially_succeeded', 'failed'])
+const THESIS_KEYS: ThesisCriterionKey[] = [
+  'sector',
+  'stage',
+  'geography',
+  'check_size',
+  'ownership_target',
+  'risk_appetite',
+]
+
+const DEFAULT_DISCOVERY_SOURCES = [
+  'company_update',
+  'product_launch',
+  'developer_activity',
+  'research',
+  'accelerator_cohort',
+]
 
 export class FounderLookupApiError extends Error {
   readonly problem: ApiProblem
@@ -76,19 +113,31 @@ export class QueryPlanUnavailableError extends Error {
  */
 export class HttpFounderLookupClient implements FounderLookupClient {
   readonly runtime = 'http' as const
+  readonly investorAccess?: InvestorAccessController
   readonly #baseUrl: string
   readonly #getInvestorCredential?: CredentialProvider
   readonly #fetch: typeof fetch
   readonly #createId: () => string
   readonly #now: () => Date
+  readonly #pollIntervalMs: number
+  readonly #maxPollAttempts: number
+  readonly #wait: (milliseconds: number) => Promise<void>
   readonly #companyNames = new Map<string, string>()
+  readonly #outboundCandidates = new Map<string, WireOutboundCandidate>()
 
   constructor(options: HttpClientOptions) {
     this.#baseUrl = options.baseUrl.replace(/\/$/, '')
-    this.#getInvestorCredential = options.getInvestorCredential
+    this.investorAccess = options.investorAccess
+    this.#getInvestorCredential =
+      options.getInvestorCredential ?? (() => options.investorAccess?.getCredential())
     this.#fetch = options.fetchImplementation ?? globalThis.fetch.bind(globalThis)
     this.#createId = options.createId ?? (() => globalThis.crypto.randomUUID())
     this.#now = options.now ?? (() => new Date())
+    this.#pollIntervalMs = options.pollIntervalMs ?? 500
+    this.#maxPollAttempts = options.maxPollAttempts ?? 24
+    this.#wait =
+      options.wait ??
+      ((milliseconds) => new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds)))
   }
 
   async getWorkspace(): Promise<WorkspaceFixture> {
@@ -98,10 +147,9 @@ export class HttpFounderLookupClient implements FounderLookupClient {
       this.#request<WireOpportunityCollection>('/opportunities?limit=50'),
     ])
     this.#rememberCompanyNames(candidatesWire)
-
-    const firstOpportunity = opportunitiesWire.items[0]
-    const opportunity = firstOpportunity
-      ? await this.#getOpportunityDetail(firstOpportunity.opportunity_id)
+    const firstOpportunityId = opportunitiesWire.items[0]?.opportunity_id
+    const opportunity = firstOpportunityId
+      ? await this.#getOpportunityDetail(firstOpportunityId)
       : null
 
     return {
@@ -112,7 +160,18 @@ export class HttpFounderLookupClient implements FounderLookupClient {
   }
 
   async searchOpportunities(input: SearchInput): Promise<SearchResponse> {
-    const plan = this.#preparePlan(input)
+    const freshWirePlan = await this.#request<WireQueryPlan>('/query-plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        raw_query: input.query.trim(),
+        max_results: 50,
+        retrieval_max_results: 10,
+        retrieval_max_pages: 2,
+        retrieval_timeout_seconds: 10,
+      }),
+    })
+    const plan = this.#preparePlan(mapWireExecutablePlan(freshWirePlan), input)
     const result = await this.#request<WireQueryResult>('/queries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -128,14 +187,84 @@ export class HttpFounderLookupClient implements FounderLookupClient {
     return composeQuerySearch(result, details, input.filters, this.#companyNames)
   }
 
+  async saveThesis(criteria: ThesisCriterion[]): Promise<ThesisView> {
+    const byKey = new Map(criteria.map((criterion) => [criterion.key, criterion]))
+    const body = Object.fromEntries(
+      THESIS_KEYS.map((key) => {
+        const criterion = byKey.get(key)
+        if (!criterion) throw new Error(`The thesis is missing the required ${key} criterion.`)
+        if (criterion.mode !== 'no_preference' && criterion.operator === null) {
+          throw new Error(`${criterion.label} requires an operator.`)
+        }
+        return [
+          key,
+          {
+            mode: criterion.mode,
+            operator: criterion.mode === 'no_preference' ? null : criterion.operator,
+            values: criterion.mode === 'no_preference' ? [] : criterion.values,
+            unknown_policy: criterion.unknownPolicy,
+          },
+        ]
+      }),
+    )
+    const wire = await this.#request<WireInvestmentThesisRevision>('/theses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return mapThesisRevision(wire)
+  }
+
+  async discoverCandidates(input: DiscoveryInput): Promise<WorkspaceCommandResult> {
+    return this.#workspaceRun('/sourcing-runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: input.query.trim(),
+        source_categories: input.sourceCategories ?? DEFAULT_DISCOVERY_SOURCES,
+        allowed_domains: input.allowedDomains ?? [],
+        excluded_domains: input.excludedDomains ?? [],
+        max_results: 10,
+        max_pages: 3,
+        max_bytes: 500_000,
+        timeout_seconds: 20,
+      }),
+    })
+  }
+
+  async preliminaryAssessCandidate(candidateId: StableId): Promise<WorkspaceCommandResult> {
+    return this.#workspaceRun(
+      `/outbound-candidates/${encodeURIComponent(candidateId)}/preliminary-assessment`,
+      { method: 'POST' },
+    )
+  }
+
   getOpportunity(opportunityId: StableId): Promise<OpportunityDetail> {
     return this.#getOpportunityDetail(opportunityId)
+  }
+
+  async screenOpportunity(opportunityId: StableId): Promise<OpportunityCommandResult> {
+    return this.#opportunityRun(
+      opportunityId,
+      `/opportunities/${encodeURIComponent(opportunityId)}/screen`,
+    )
+  }
+
+  async retryOpportunityRun(
+    opportunityId: StableId,
+    runId: StableId,
+  ): Promise<OpportunityCommandResult> {
+    return this.#opportunityRun(
+      opportunityId,
+      `/runs/${encodeURIComponent(runId)}/retry`,
+    )
   }
 
   async submitApplication(input: ApplicationInput): Promise<ApplicationReceipt> {
     const form = new FormData()
     form.set('company_name', input.companyName)
     form.set('deck', input.deck)
+    if (input.outboundCandidateId) form.set('outbound_candidate_id', input.outboundCandidateId)
 
     const wire = await this.#request<WireApplicationReceipt>(
       '/applications',
@@ -173,7 +302,20 @@ export class HttpFounderLookupClient implements FounderLookupClient {
       },
     )
     this.#companyNames.set(wire.company_id, wire.company_name)
+    this.#outboundCandidates.set(wire.outbound_candidate_id, wire)
     return mapActivation(wire)
+  }
+
+  async recordOutreach(candidateId: StableId, input: OutreachInput): Promise<OutreachReceipt> {
+    const wire = await this.#request<WireOutreachRecord>(
+      `/outbound-candidates/${encodeURIComponent(candidateId)}/outreach`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: input.method, status: input.status.trim() }),
+      },
+    )
+    return mapOutreach(wire)
   }
 
   async recordDecision(input: DecisionInput): Promise<DecisionReceipt> {
@@ -203,13 +345,24 @@ export class HttpFounderLookupClient implements FounderLookupClient {
         this.#request<WirePipelineRun>(`/runs/${encodeURIComponent(runId)}`),
       ),
     )
-    return mapOpportunityDetail(detail, runs, this.#companyNames.get(detail.company_id))
+    return mapOpportunityDetail(
+      detail,
+      runs,
+      this.#companyNames.get(detail.company_id),
+      detail.outbound_candidate_id
+        ? this.#outboundCandidates.get(detail.outbound_candidate_id)
+        : undefined,
+    )
   }
 
-  #preparePlan(input: SearchInput): ExecutableQueryPlan {
-    const removed = new Set(input.removedCriterionIds ?? [])
+  #preparePlan(freshPlan: ExecutableQueryPlan, input: SearchInput): ExecutableQueryPlan {
+    const removedIds = new Set(input.removedCriterionIds ?? [])
+    const removedFields = new Set(input.removedCriterionFields ?? [])
+    for (const criterion of input.plan.criteria) {
+      if (removedIds.has(criterion.criterionId)) removedFields.add(criterion.field)
+    }
     const rawQuery = input.query.trim()
-    const criteria = input.plan.criteria.filter((criterion) => !removed.has(criterion.criterionId))
+    const criteria = freshPlan.criteria.filter((criterion) => !removedFields.has(criterion.field))
 
     if (input.filters.origin !== 'all') {
       criteria.push({
@@ -223,39 +376,66 @@ export class HttpFounderLookupClient implements FounderLookupClient {
       })
     }
 
-    if (criteria.length === 0 && input.plan.retrievalRequests.length === 0) {
+    if (criteria.length === 0 && freshPlan.retrievalRequests.length === 0) {
       throw new QueryPlanUnavailableError()
     }
 
-    const unresolvedPhrases = input.plan.unresolvedPhrases.flatMap((phrase) => {
-      const startOffset = rawQuery.indexOf(phrase.text)
-      return startOffset < 0
-        ? []
-        : [{ ...phrase, startOffset, endOffset: startOffset + phrase.text.length }]
-    })
-
     return {
-      ...input.plan,
-      queryPlanVersionId: `query-version-${this.#createId()}`,
-      supersedesQueryPlanVersionId: input.plan.queryPlanVersionId,
+      ...freshPlan,
+      queryPlanVersionId: `query-version-ui-${this.#createId()}`,
+      supersedesQueryPlanVersionId: freshPlan.queryPlanVersionId,
       rawQuery,
       state: 'validated',
       criteria,
-      retrievalRequests: input.plan.retrievalRequests.map((request) => ({
+      retrievalRequests: freshPlan.retrievalRequests.map((request) => ({
         ...request,
         query: rawQuery,
       })),
-      unresolvedPhrases,
-      semanticRerank: input.plan.semanticRerank
-        ? { ...input.plan.semanticRerank, query: rawQuery }
+      semanticRerank: freshPlan.semanticRerank
+        ? { ...freshPlan.semanticRerank, query: rawQuery }
         : undefined,
       createdAt: this.#now().toISOString(),
     }
   }
 
+  async #workspaceRun(path: string, init: RequestInit): Promise<WorkspaceCommandResult> {
+    const accepted = await this.#request<WireRunAccepted>(path, init)
+    const settled = await this.#pollRun(accepted.run)
+    return {
+      run: mapPipelineRun(settled.run),
+      workspace: await this.getWorkspace(),
+      timedOut: settled.timedOut,
+    }
+  }
+
+  async #opportunityRun(
+    opportunityId: StableId,
+    path: string,
+  ): Promise<OpportunityCommandResult> {
+    const accepted = await this.#request<WireRunAccepted>(path, { method: 'POST' })
+    const settled = await this.#pollRun(accepted.run)
+    return {
+      run: mapPipelineRun(settled.run),
+      opportunity: await this.#getOpportunityDetail(opportunityId),
+      timedOut: settled.timedOut,
+    }
+  }
+
+  async #pollRun(initial: WirePipelineRun): Promise<{ run: WirePipelineRun; timedOut: boolean }> {
+    let run = initial
+    for (let attempt = 0; attempt < this.#maxPollAttempts; attempt += 1) {
+      if (TERMINAL_RUN_STATUSES.has(run.status)) return { run, timedOut: false }
+      if (attempt === this.#maxPollAttempts - 1) break
+      await this.#wait(this.#pollIntervalMs)
+      run = await this.#request<WirePipelineRun>(`/runs/${encodeURIComponent(run.run_id)}`)
+    }
+    return { run, timedOut: true }
+  }
+
   #rememberCompanyNames(collection: WireCandidateCollection) {
     for (const candidate of collection.items) {
       this.#companyNames.set(candidate.company_id, candidate.company_name)
+      this.#outboundCandidates.set(candidate.outbound_candidate_id, candidate)
     }
   }
 

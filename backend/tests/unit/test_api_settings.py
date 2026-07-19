@@ -3,8 +3,9 @@
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr, ValidationError
 
-from founderlookup.api.settings import APISettings
+from founderlookup.api.settings import APISettings, RuntimeEnvironment
 
 
 def test_local_dotenv_loads_unprefixed_mistral_key_without_enabling_ocr(
@@ -24,4 +25,114 @@ def test_local_dotenv_loads_unprefixed_mistral_key_without_enabling_ocr(
     assert settings.mistral_api_key is not None
     assert settings.mistral_api_key.get_secret_value() == fake_key
     assert settings.mistral_ocr_enabled is False
+    assert settings.demo_seed_enabled is False
     assert fake_key not in repr(settings)
+
+
+def test_demo_seed_requires_explicit_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FOUNDERLOOKUP_DEMO_SEED_ENABLED", raising=False)
+    disabled = APISettings(_env_file=None)  # type: ignore[call-arg]
+
+    monkeypatch.setenv("FOUNDERLOOKUP_DEMO_SEED_ENABLED", "true")
+    enabled = APISettings(_env_file=None)  # type: ignore[call-arg]
+
+    assert disabled.demo_seed_enabled is False
+    assert enabled.demo_seed_enabled is True
+
+
+def test_production_rejects_process_local_demo_seed() -> None:
+    with pytest.raises(ValidationError, match="demo seeding"):
+        APISettings(  # type: ignore[call-arg]
+            _env_file=None,
+            environment=RuntimeEnvironment.PRODUCTION,
+            demo_seed_enabled=True,
+        )
+
+
+def test_tavily_is_disabled_by_default_and_enabled_mode_requires_key() -> None:
+    disabled = APISettings(_env_file=None)  # type: ignore[call-arg]
+    assert disabled.tavily_enabled is False
+    assert disabled.tavily_api_key is None
+
+    with pytest.raises(ValidationError, match="server-side API key"):
+        APISettings(_env_file=None, tavily_enabled=True)  # type: ignore[call-arg]
+
+    enabled = APISettings(  # type: ignore[call-arg]
+        _env_file=None,
+        tavily_enabled=True,
+        tavily_api_key=SecretStr("fictional-settings-tavily-key"),
+        tavily_allowed_domains="example.com, research.example.org ",
+    )
+    assert enabled.tavily_allowed_domain_list == (
+        "example.com",
+        "research.example.org",
+    )
+    assert "fictional-settings-tavily-key" not in repr(enabled)
+
+
+def test_public_source_adapters_are_independent_opt_ins_with_server_only_token() -> None:
+    disabled = APISettings(_env_file=None)  # type: ignore[call-arg]
+    assert disabled.github_enabled is False
+    assert disabled.hackernews_enabled is False
+    assert disabled.openalex_enabled is False
+    assert disabled.semantic_scholar_enabled is False
+    assert disabled.patentsview_enabled is False
+    assert disabled.github_token is None
+
+    enabled = APISettings(  # type: ignore[call-arg]
+        _env_file=None,
+        github_enabled=True,
+        hackernews_enabled=True,
+        openalex_enabled=True,
+        semantic_scholar_enabled=True,
+        patentsview_enabled=True,
+        github_token=SecretStr("fictional-github-token"),
+        sourcing_cache_ttl_seconds=1_800,
+    )
+    assert enabled.github_enabled is True
+    assert enabled.sourcing_cache_ttl_seconds == 1_800
+    assert "fictional-github-token" not in repr(enabled)
+
+
+def test_sourcing_coordinator_rejects_an_incoherent_page_budget() -> None:
+    with pytest.raises(ValidationError, match="sourcing max pages"):
+        APISettings(  # type: ignore[call-arg]
+            _env_file=None,
+            sourcing_max_results=2,
+            sourcing_max_pages=3,
+        )
+
+
+def test_environment_and_log_level_are_validated_and_normalized() -> None:
+    settings = APISettings(  # type: ignore[call-arg]
+        _env_file=None,
+        environment=RuntimeEnvironment.TEST,
+        log_level="warning",
+    )
+    assert settings.environment is RuntimeEnvironment.TEST
+    assert settings.log_level == "WARNING"
+
+    with pytest.raises(ValidationError, match="log level"):
+        APISettings(_env_file=None, log_level="VERBOSE")  # type: ignore[call-arg]
+
+
+def test_checked_env_example_keys_map_to_settings_and_example_parses() -> None:
+    example = Path(__file__).parents[2] / ".env.example"
+    keys = {
+        line.split("=", 1)[0]
+        for raw in example.read_text(encoding="utf-8").splitlines()
+        if (line := raw.strip()) and not line.startswith("#") and "=" in line
+    }
+    accepted_keys: set[str] = set()
+    for name, field in APISettings.model_fields.items():
+        alias = field.validation_alias
+        if isinstance(alias, str):
+            accepted_keys.add(alias)
+        else:
+            accepted_keys.add(f"FOUNDERLOOKUP_{name.upper()}")
+
+    assert keys <= accepted_keys
+    settings = APISettings(_env_file=example)  # type: ignore[call-arg]
+    assert settings.environment is RuntimeEnvironment.DEVELOPMENT
+    assert settings.tavily_enabled is False
+    assert settings.mistral_ocr_enabled is False

@@ -7,7 +7,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115,<1",
     "httpx>=0.28,<1",
-    "langgraph>=1.2.9",
+    "langgraph>=1.2.9,<2",
     "openai>=2.46.0",
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
@@ -42,6 +42,9 @@ default-groups = ["dev"]
 [tool.pytest.ini_options]
 addopts = ["-ra", "--strict-config", "--strict-markers"]
 testpaths = ["tests"]
+markers = [
+    "live: opt-in tests that call real external providers and may incur cost",
+]
 
 [tool.coverage.run]
 branch = true

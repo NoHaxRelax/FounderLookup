@@ -128,6 +128,8 @@ Every full Assessment Envelope SHALL contain independent Founder, Market, and Id
 ### Requirement: Intelligence modules return one structured schema
 The intelligence pipeline SHALL separately evaluate market conditions, idea novelty and quality, founder and team evidence, idea-versus-market viability, and validation or adversarial checks, then synthesize them through the common Assessment Envelope. These are logical analysis responsibilities and MUST remain testable independently of any agent-orchestration framework or model provider.
 
+The selected live implementation MAY use OpenAI `gpt-5.6-luna` strict Structured Outputs, including explicitly enabled founder-private inputs for this hackathon MVP, but its output is only a proposal. Acceptance still requires the same schema, citation, Claim/Evidence, bias, contradiction, Unknown, Recommendation-versus-Decision, and run-version validations used by deterministic adapters. Provider refusal, malformed output, unsupported citations, or timeout SHALL fail closed without erasing already accepted stage outputs.
+
 #### Scenario: Specialist output is accepted
 - **WHEN** a logical analysis module completes
 - **THEN** its output is schema-valid, identifies input Evidence and Claims, records confidence and gaps, and can be consumed without parsing free-form prose

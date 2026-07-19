@@ -13,6 +13,7 @@ from founderlookup.application.models import (
     ThesisCriterionMode,
     ThesisDraft,
 )
+from founderlookup.application.sourcing import BoundedSourcingCommand
 from founderlookup.domain.assessment import HumanDecisionDisposition
 from founderlookup.domain.common import NonBlankStr, ScalarValue, StableId, VersionId
 from founderlookup.domain.evidence import SourceCategory
@@ -24,6 +25,10 @@ from founderlookup.domain.query import (
     QueryPlanningMode,
     QueryPlanState,
     UnknownValuePolicy,
+)
+from founderlookup.screening.query_planner import (
+    ControlledVocabularyEntry,
+    QueryPlannerRequest,
 )
 
 
@@ -67,6 +72,63 @@ class OutreachCommand(RequestModel):
 
 class ActivationCommand(RequestModel):
     outreach_draft: NonBlankStr | None = None
+
+
+class SourcingRunCommand(RequestModel):
+    """Provider-neutral public discovery command with explicit hard budgets."""
+
+    query: str = Field(min_length=1, max_length=400)
+    source_categories: tuple[SourceCategory, ...] = (SourceCategory.OTHER,)
+    allowed_domains: tuple[str, ...] = ()
+    excluded_domains: tuple[str, ...] = ()
+    max_results: int = Field(default=10, gt=0, le=20)
+    max_pages: int = Field(default=5, gt=0, le=20)
+    max_bytes: int = Field(default=500_000, gt=0, le=5_000_000)
+    timeout_seconds: int = Field(default=20, gt=0, le=60)
+
+    @model_validator(mode="after")
+    def validate_domain_shape(self) -> Self:
+        self.to_domain()
+        return self
+
+    def to_domain(self) -> BoundedSourcingCommand:
+        return BoundedSourcingCommand.model_validate_json(self.model_dump_json())
+
+
+class ControlledVocabularyRequest(RequestModel):
+    phrase: str = Field(min_length=1, max_length=100)
+    field: QueryCriterionField
+    canonical_values: tuple[NonBlankStr, ...] = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_domain_shape(self) -> Self:
+        self.to_domain()
+        return self
+
+    def to_domain(self) -> ControlledVocabularyEntry:
+        return ControlledVocabularyEntry.model_validate_json(self.model_dump_json())
+
+
+class QueryPlannerCommand(RequestModel):
+    """One compound investor query plus explicit provider-neutral retrieval budgets."""
+
+    raw_query: str = Field(min_length=1, max_length=400)
+    max_results: int = Field(default=25, ge=1, le=100)
+    retrieval_max_results: int = Field(default=10, ge=1, le=20)
+    retrieval_max_pages: int = Field(default=2, ge=1, le=3)
+    retrieval_timeout_seconds: int = Field(default=10, ge=1, le=30)
+    controlled_vocabulary: tuple[ControlledVocabularyRequest, ...] = Field(
+        default=(),
+        max_length=50,
+    )
+
+    @model_validator(mode="after")
+    def validate_domain_shape(self) -> Self:
+        self.to_domain()
+        return self
+
+    def to_domain(self) -> QueryPlannerRequest:
+        return QueryPlannerRequest.model_validate_json(self.model_dump_json())
 
 
 class DecisionCommand(RequestModel):

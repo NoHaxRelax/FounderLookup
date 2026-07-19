@@ -302,6 +302,10 @@ export interface WireOpportunityDetail {
     elapsed_seconds: number
     target_state: 'on_track' | 'approaching' | 'missed' | 'complete'
   }
+  public_contact_routes?: WirePublicContactRoute[]
+  contact_routes?: WirePublicContactRoute[]
+  sourcing_audit?: WireSourcingLoopAudit
+  agent_loop?: WireSourcingLoopAudit
 }
 
 export interface WireOpportunitySummary {
@@ -331,8 +335,43 @@ export interface WireOutboundCandidate {
   discovered_at: string
   source_artifact_ids: StableId[]
   preliminary_assessment: WireAssessmentEnvelope | null
+  application_id?: StableId | null
   outreach_draft: string | null
   updated_at: string
+  public_contact_routes?: WirePublicContactRoute[]
+  contact_routes?: WirePublicContactRoute[]
+  sourcing_audit?: WireSourcingLoopAudit
+  agent_loop?: WireSourcingLoopAudit
+}
+
+export interface WirePublicContactRoute {
+  route_id: StableId
+  kind: 'website' | 'contact_page' | 'contact_url' | 'public_email' | 'public_profile' | 'other'
+  label: string
+  value: string
+  href?: string | null
+  classification: 'public' | 'founder_private' | 'investor_internal' | 'unknown'
+  source_artifact_id: StableId
+  source_name: string
+  source_locator: string
+  collected_at?: string | null
+}
+
+export interface WireSourcingLoopAudit {
+  status: 'running' | 'stopped' | 'completed' | 'failed'
+  rounds_completed: number
+  round_limit?: number | null
+  stop_reason: string
+  run_id?: StableId | null
+}
+
+export interface WireOutreachRecord {
+  outreach_id: StableId
+  outbound_candidate_id: StableId
+  method: 'email' | 'linkedin' | 'introduction' | 'other'
+  status: string
+  actor_id: StableId
+  occurred_at: string
 }
 
 export interface WireCandidateCollection {
@@ -415,9 +454,13 @@ export interface WireQueryResult {
 }
 
 export interface WirePipelineRun {
+  schema_version?: 'pipeline-run.v0'
   run_id: StableId
   kind: string
   status: 'queued' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed'
+  versions?: Record<string, string>
+  input_snapshot_id?: StableId
+  input_snapshot_as_of?: string
   queued_at: string
   started_at: string | null
   completed_at: string | null
@@ -427,8 +470,10 @@ export interface WirePipelineRun {
     queued_at: string
     started_at: string | null
     completed_at: string | null
+    accepted_output_ids?: StableId[]
     failure_ids: StableId[]
   }>
+  accepted_output_ids?: StableId[]
   failures: Array<{
     failure_id: StableId
     stage_key: string
@@ -437,6 +482,16 @@ export interface WirePipelineRun {
     retryable: boolean
     occurred_at: string
   }>
+  retry_of_run_id?: StableId | null
+  attempt?: number
+  sourcing_audit?: WireSourcingLoopAudit
+  agent_loop?: WireSourcingLoopAudit
+}
+
+export interface WireRunAccepted {
+  run_id: StableId
+  status_url: string
+  run: WirePipelineRun
 }
 
 export interface WireProblemDetails {

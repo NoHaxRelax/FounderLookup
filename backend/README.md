@@ -1,8 +1,9 @@
 # FounderLookup backend
 
 Python/FastAPI backend for the VC Brain MVP. The project uses a `src/` layout, is managed
-with `uv`, and deliberately contains no generic-search, model-provider, or agent-framework
-dependency before the corresponding human decision gates.
+with `uv`. Tavily is the human-selected P0 generic public-web provider and is integrated through
+direct bounded HTTP behind provider-neutral ports, so no provider SDK enters the domain. No
+investment-model or agent-framework dependency is present before its separate human gate.
 
 ## Prerequisites
 
@@ -33,8 +34,9 @@ The service exposes:
   founder intake and capability-scoped status
 - `/api/v1/theses`, `/api/v1/sourcing-runs`, and `/api/v1/outbound-candidates` — protected
   thesis and sourcing commands
-- `/api/v1/queries`, `/api/v1/opportunities`, and `/api/v1/runs` — protected typed query,
-  Screening, nested evidence/memo read models, and bounded retry
+- `/api/v1/query-plans`, `/api/v1/queries`, `/api/v1/opportunities`, and `/api/v1/runs` —
+  protected compound-query planning, typed execution, Screening, nested evidence/memo read models,
+  and bounded retry
 - `POST /api/v1/opportunities/{id}/decisions` — append-only human Decisions
 - `GET /api/v1/artifacts/{id}` — protected, content-verified private artifact retrieval
 
@@ -61,6 +63,128 @@ later persistence/worker change.
 No environment file is required for the health endpoint. `.env` and `.data/` are ignored so
 credentials and private local artifacts are not committed.
 
+`FOUNDERLOOKUP_ENV` accepts `development`, `test`, or `production`. Fictional demo seeding is
+rejected in production. `FOUNDERLOOKUP_LOG_LEVEL` accepts the standard `DEBUG`, `INFO`,
+`WARNING`, `ERROR`, or `CRITICAL` levels and configures the `founderlookup` package logger without
+logging credentials, provider bodies, or acquired content.
+
+## Compound natural-language query planning
+
+`POST /api/v1/query-plans` turns one investor-authored compound request into one typed,
+inspectable `OpportunityQueryPlan`. The executable runtime injects the deterministic P0 planner;
+the lower-level `create_app()` factory fails closed with `503` when no planner is supplied. The
+endpoint is investor protected and accepts explicit result/retrieval budgets plus an optional
+controlled vocabulary for geography, sector, or accelerator phrases.
+
+```bash
+curl -sS http://127.0.0.1:8000/api/v1/query-plans \
+  -H "Authorization: Bearer $FOUNDERLOOKUP_INVESTOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_query": "technical founder, Berlin, AI infra, enterprise traction, no prior VC backing, top-tier accelerator",
+    "max_results": 50,
+    "retrieval_max_results": 20,
+    "retrieval_max_pages": 3,
+    "retrieval_timeout_seconds": 30
+  }'
+```
+
+The baseline recognizes the six supported PRD attributes in that request, preserves the requested
+absence of prior backing as the boolean operand `false`, and leaves subjective `top-tier` visibly
+unresolved unless the investor supplies a controlled mapping. Retrieval stays provider-neutral and
+bounded. Executable-looking SQL, shell text, prompt-injection phrases, and unsupported prose remain
+inert unresolved spans and never become SQL or provider expressions. Planning is one investor
+interaction; executing deterministic canonical-data filters or starting a public sourcing run is a
+subsequent explicit action, so no interpreted criterion is silently executed or altered.
+
+## Multi-adapter outbound sourcing
+
+The executable runtime can fan one bounded sourcing command across Tavily plus authoritative
+public GitHub, Hacker News, OpenAlex, Semantic Scholar, and PatentsView adapters. Every adapter is
+independently opt-in and disabled by default. Tavily remains the only generic public-web provider;
+put its server-side key in the ignored `.env` before enabling it:
+
+```dotenv
+TAVILY_API_KEY=replace-with-a-real-local-key
+FOUNDERLOOKUP_TAVILY_ENABLED=true
+# Optional source-specific adapters; enable only the sources approved for this deployment.
+FOUNDERLOOKUP_GITHUB_ENABLED=true
+GITHUB_TOKEN=
+FOUNDERLOOKUP_HACKERNEWS_ENABLED=true
+FOUNDERLOOKUP_OPENALEX_ENABLED=true
+FOUNDERLOOKUP_SEMANTIC_SCHOLAR_ENABLED=true
+FOUNDERLOOKUP_PATENTSVIEW_ENABLED=true
+```
+
+A key by itself never enables a request. If the flag is enabled without a key, configuration fails
+closed. GitHub's token is optional and server-only; omitting it uses the bounded unauthenticated
+public API. The other source-specific adapters are keyless. If every adapter is disabled, the
+runtime returns a safe `503` instead of claiming a fixture run was live. Configure the global
+result, page, content-byte, timeout, and cache ceilings plus Tavily's provider-specific response
+and domain ceilings in `.env.example`.
+
+After creating a thesis, a protected sourcing command is suitable for an on-demand or external
+cron trigger:
+
+```bash
+curl -sS http://127.0.0.1:8000/api/v1/sourcing-runs \
+  -H "Authorization: Bearer $FOUNDERLOOKUP_INVESTOR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "technical founders building enterprise AI infrastructure",
+    "source_categories": ["developer_activity", "public_social", "research", "patent"],
+    "max_results": 10,
+    "max_pages": 5,
+    "max_bytes": 500000,
+    "timeout_seconds": 20
+  }'
+```
+
+The HTTP response is `202` with a queued run and `Location`; poll that protected run URL for the
+terminal result. The coordinator runs enabled adapters concurrently, prefers an authoritative
+source-specific record when it duplicates a generic URL, and preserves successful artifacts when
+another source times out or fails. Tavily snippets and provider relevance remain retrieval
+telemetry, never Evidence. Only approved public HTTP(S) original URLs can be acquired; localhost,
+private-network, credential-bearing, nonstandard-port, denied, and non-public targets are rejected.
+Acquired bytes become protected immutable Source Artifacts with exact origin provenance.
+
+Structured public records project only explicit allowlisted fields into Observations, Evidence,
+and unverified Claims. Founder identity stays Unknown unless a later reviewed identity workflow
+links it; handles and showcase participant display names never trigger a silent merge. Public
+hackathon/showcase pages may link an explicitly labeled public pitch deck, which is acquired as a
+separate artifact and related back to the same unresolved candidate. The runtime never activates a
+candidate, sends outreach, records a Decision, or treats source silence as a negative signal.
+
+Each artifact receives a collection-policy sidecar. Source terms and robots facts remain visibly
+Unknown until this deployment records reviewed facts; enabling an adapter is not a claim that those
+facts were reviewed. Collection must remain public, lawful, purpose-limited, and compliant with
+the source's current policies.
+
+Repeated commands retain separate run/telemetry history while reusing unchanged artifacts during
+`FOUNDERLOOKUP_SOURCING_CACHE_TTL_SECONDS`. There is intentionally no hidden in-process scheduler:
+an external cron or job runner can call the same protected endpoint, making recurrence explicit and
+deployable while preserving idempotency. Durable worker recovery and rehydrating process-local
+candidate projections after restart remain follow-up production work.
+
+## Optional fictional UI demo state
+
+The executable runtime starts empty by default. To evaluate the HTTP-connected UI without first
+entering setup data, set this explicit local flag in `.env` and restart the backend:
+
+```dotenv
+FOUNDERLOOKUP_DEMO_SEED_ENABLED=true
+```
+
+The bootstrap creates one fictional default thesis and one clearly labeled fictional outbound
+candidate with two fictional public-source handles. It registers only explicit fictional signals
+with the deterministic screening bridge, then completes the candidate's preliminary assessment
+through the public service API. The identifiers are demo provenance handles, not stored source
+content or assertions about a real person. The bootstrap is idempotent within one service instance
+and makes no network, model, OCR, or private-artifact call. It does not create an inbound
+Application, store deck bytes, activate the candidate, draft or send outreach, run full Screening,
+or record a human Decision. Those actions remain user-driven. This demo projection is process-local
+and is recreated after a backend restart; set the flag back to `false` for an empty runtime.
+
 ## Pitch-deck OCR safety
 
 Mistral OCR 4 is available only as a page-extraction adapter. It sends one bounded, stateless
@@ -68,8 +192,9 @@ Mistral OCR 4 is available only as a page-extraction adapter. It sends one bound
 deck URL, redirects, or image-base64 output. The request selects only pages zero through the
 configured `FOUNDERLOOKUP_MISTRAL_OCR_MAX_PAGES` cap, which also bounds per-request page cost.
 Responses are streamed through declared-length and incremental decompressed-byte limits before
-JSON parsing. `mistral-ocr-latest` is the configurable request alias, while each result preserves
-the concrete model returned by Mistral.
+JSON parsing. `mistral-ocr-latest` is the configurable request alias. When Mistral echoes that
+alias instead of a version, the adapter performs one document-free, bounded model-card lookup and
+accepts exactly one OCR 4 version alias, so every stored result still preserves a concrete model.
 
 Copying `MISTRAL_API_KEY` into `.env` makes the secret available only to the server-side
 composition root; it is not permission to transfer a deck. OCR is disabled by default. Public
@@ -131,7 +256,8 @@ contracts and must not leak provider payload types into `domain/`.
 
 ## Dependency gates
 
-Do not add Tavily, Exa, an investment-model SDK, LangGraph, LangChain, LlamaIndex, or an
-alternative orchestration framework until its OpenSpec human gate is completed and recorded.
-The direct HTTP Mistral OCR adapter is limited to extraction and does not approve investment
-analysis. Deterministic fakes and framework-neutral interfaces come first.
+Tavily is the only approved P0 generic web provider; do not add Exa or a second generic provider
+without a later OpenSpec decision. Do not add an investment-model SDK, LangGraph, LangChain,
+LlamaIndex, or another orchestration framework until its separate human gate is completed and
+recorded. The direct HTTP Mistral OCR adapter remains limited to extraction and does not approve
+investment analysis.

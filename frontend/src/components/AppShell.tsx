@@ -1,111 +1,219 @@
 import {
-  BriefcaseBusiness,
-  FileCheck2,
-  Inbox,
-  Menu,
-  Search,
-  Sparkles,
-  X,
-} from 'lucide-react'
+  BulbOutlined,
+  FileDoneOutlined,
+  LockOutlined,
+  MenuOutlined,
+  SearchOutlined,
+  SolutionOutlined,
+} from '@ant-design/icons'
+import { Badge, Button, Drawer, Layout, Menu, Typography, type MenuProps } from 'antd'
 import { useState, type ReactNode } from 'react'
 
-export type AppRoute = 'sourcing' | 'opportunity' | 'memo' | 'apply'
+export type AppRoute = 'home' | 'sourcing' | 'opportunity' | 'memo' | 'apply'
+export type InvestorRoute = Exclude<AppRoute, 'home' | 'apply'>
 
-const navItems: Array<{ route: AppRoute; label: string; detail: string; icon: ReactNode }> = [
+interface NavigationItem {
+  route: InvestorRoute
+  label: string
+  detail: string
+  icon: ReactNode
+}
+
+const navItems: NavigationItem[] = [
   {
     route: 'sourcing',
     label: 'Sourcing',
     detail: 'Query and candidate queue',
-    icon: <Search aria-hidden="true" />,
+    icon: <SearchOutlined aria-hidden="true" />,
   },
   {
     route: 'opportunity',
     label: 'Opportunity',
     detail: 'Claims and evidence',
-    icon: <BriefcaseBusiness aria-hidden="true" />,
+    icon: <SolutionOutlined aria-hidden="true" />,
   },
   {
     route: 'memo',
     label: 'Memo & decision',
     detail: 'Cited review',
-    icon: <FileCheck2 aria-hidden="true" />,
-  },
-  {
-    route: 'apply',
-    label: 'Founder apply',
-    detail: 'Deck intake',
-    icon: <Inbox aria-hidden="true" />,
+    icon: <FileDoneOutlined aria-hidden="true" />,
   },
 ]
 
+const menuItems = (
+  route: InvestorRoute,
+  opportunityId?: string,
+  closeMenu?: () => void,
+): MenuProps['items'] =>
+  navItems.map((item) => ({
+    key: item.route,
+    icon: item.icon,
+    label: (
+      <a
+        className="nav-link"
+        href={
+          item.route === 'sourcing' || !opportunityId
+            ? `#/${item.route}`
+            : `#/${item.route}/${encodeURIComponent(opportunityId)}`
+        }
+        aria-current={route === item.route ? 'page' : undefined}
+        onClick={closeMenu}
+      >
+        <span>{item.label}</span>
+        <small>{item.detail}</small>
+      </a>
+    ),
+  }))
+
+function Brand({
+  compact = false,
+  href,
+  onClick,
+}: {
+  compact?: boolean
+  href: string
+  onClick?: () => void
+}) {
+  return (
+    <a className="brand" href={href} aria-label="FounderLookup home" onClick={onClick}>
+      <span className="brand__mark"><BulbOutlined aria-hidden="true" /></span>
+      <span className="brand__copy">
+        FounderLookup
+        {!compact && <small>Evidence before conviction</small>}
+      </span>
+    </a>
+  )
+}
+
 export interface AppShellProps {
-  route: AppRoute
+  route: InvestorRoute
+  runtime: 'fixture' | 'http'
+  opportunityId?: string
+  onLock?: () => void
   children: ReactNode
 }
 
-export function AppShell({ route, children }: AppShellProps) {
+export function InvestorShell({
+  route,
+  runtime,
+  opportunityId,
+  onLock,
+  children,
+}: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div className="app-shell">
+    <Layout className="app-shell">
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <header className="mobile-header">
-        <a className="brand" href="#/sourcing" aria-label="FounderLookup home" onClick={() => setMenuOpen(false)}>
-          <span className="brand__mark"><Sparkles aria-hidden="true" /></span>
-          <span>FounderLookup</span>
-        </a>
-        <button
-          className="icon-button"
-          type="button"
+
+      <Layout.Header className="mobile-header">
+        <Brand compact href="#/sourcing" onClick={() => setMenuOpen(false)} />
+        <Button
+          className="mobile-menu-button"
+          type="text"
+          icon={<MenuOutlined />}
           aria-expanded={menuOpen}
-          aria-controls="primary-navigation"
-          aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
-          onClick={() => setMenuOpen((value) => !value)}
-        >
-          {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
-        </button>
-      </header>
+          aria-controls="mobile-primary-navigation"
+          aria-label="Open investor navigation"
+          onClick={() => setMenuOpen(true)}
+        />
+      </Layout.Header>
 
-      <aside className={`sidebar ${menuOpen ? 'sidebar--open' : ''}`}>
-        <a className="brand desktop-brand" href="#/sourcing" aria-label="FounderLookup home">
-          <span className="brand__mark"><Sparkles aria-hidden="true" /></span>
-          <span>
-            FounderLookup
-            <small>Evidence before conviction</small>
-          </span>
-        </a>
-
-        <nav id="primary-navigation" aria-label="Primary navigation">
-          <ul className="nav-list">
-            {navItems.map((item) => (
-              <li key={item.route}>
-                <a
-                  className="nav-link"
-                  href={`#/${item.route}`}
-                  aria-current={route === item.route ? 'page' : undefined}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {item.icon}
-                  <span>
-                    {item.label}
-                    <small>{item.detail}</small>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
+      <aside className="sidebar">
+        <Brand href="#/sourcing" />
+        <nav aria-label="Investor workspace">
+          <Menu
+            mode="inline"
+            selectedKeys={[route]}
+            items={menuItems(route, opportunityId)}
+            className="primary-menu"
+          />
         </nav>
-
         <div className="sidebar-note">
-          <span className="status-dot" aria-hidden="true" />
+          <Badge status={runtime === 'fixture' ? 'success' : 'processing'} />
           <div>
-            <strong>Fixture workspace</strong>
-            <small>Deterministic · no provider calls</small>
+            <Typography.Text strong>
+              {runtime === 'fixture'
+                ? 'Fixture workspace'
+                : onLock
+                  ? 'Protected API workspace'
+                  : 'Local API workspace'}
+            </Typography.Text>
+            {onLock && (
+              <Button
+                className="lock-workspace-button"
+                type="text"
+                size="small"
+                icon={<LockOutlined aria-hidden="true" />}
+                onClick={onLock}
+              >
+                Lock workspace
+              </Button>
+            )}
+            <Typography.Text type="secondary">
+              {runtime === 'fixture'
+                ? 'Deterministic · no provider calls'
+                : onLock
+                  ? 'Session key · never bundled'
+                  : 'Same-origin · proxied to FastAPI'}
+            </Typography.Text>
           </div>
         </div>
       </aside>
 
-      <main id="main-content" className="main-content" tabIndex={-1}>
+      <Layout.Content id="main-content" className="main-content" tabIndex={-1}>
+        {children}
+      </Layout.Content>
+
+      <Drawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        placement="left"
+        size="min(20rem, calc(100dvi - 2rem))"
+        title={<Brand compact href="#/sourcing" onClick={() => setMenuOpen(false)} />}
+        classNames={{ body: 'mobile-drawer__body' }}
+        rootClassName="mobile-navigation-drawer"
+      >
+        <nav id="mobile-primary-navigation" aria-label="Mobile investor workspace">
+          <Menu
+            mode="inline"
+            selectedKeys={[route]}
+            items={menuItems(route, opportunityId, () => setMenuOpen(false))}
+            className="primary-menu"
+          />
+        </nav>
+      </Drawer>
+    </Layout>
+  )
+}
+
+export function FounderShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="founder-shell">
+      <a className="skip-link" href="#founder-main-content">Skip to main content</a>
+      <header className="founder-header">
+        <Brand href="#/apply" />
+        <span className="founder-header__context">Application &amp; private status</span>
+      </header>
+      <main id="founder-main-content" className="founder-main-content" tabIndex={-1}>
+        {children}
+      </main>
+      <footer className="founder-footer">
+        <span>FounderLookup</span>
+        <span>Only your application and bounded status appear here.</span>
+      </footer>
+    </div>
+  )
+}
+
+export function LandingShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="landing-shell">
+      <header className="landing-header" aria-label="FounderLookup">
+        <span className="brand__mark"><BulbOutlined aria-hidden="true" /></span>
+        <span className="brand__copy">FounderLookup<small>Evidence before conviction</small></span>
+      </header>
+      <main id="landing-main-content" className="landing-main-content">
         {children}
       </main>
     </div>

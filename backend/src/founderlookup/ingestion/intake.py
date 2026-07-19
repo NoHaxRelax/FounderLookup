@@ -430,6 +430,7 @@ class ApplicationIntakeService:
             {
                 "schema": APPLICATION_INTAKE_SCHEMA_VERSION,
                 "company_name": company_name.casefold(),
+                "canonical_company_id": submission.canonical_company_id,
                 "media_type": media_type,
                 "content_sha256": content_sha256,
             }
@@ -438,7 +439,11 @@ class ApplicationIntakeService:
         source_artifact_id = self._id_factory("source-artifact")
         candidate = ApplicationIntakeRecord(
             application_id=self._id_factory("application"),
-            company_id=self._id_factory("company"),
+            company_id=(
+                submission.canonical_company_id
+                if submission.canonical_company_id is not None
+                else self._id_factory("company")
+            ),
             run_id=self._id_factory("run"),
             company_name=company_name,
             idempotency_key_sha256=_sha256(idempotency_key.encode()),
