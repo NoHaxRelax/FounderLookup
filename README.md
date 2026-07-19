@@ -17,17 +17,7 @@ The scoring engine is real and green: **330+ tests, every scoring rule adversari
 
 ## The flow
 
-```mermaid
-flowchart TD
-    IN["Inbound: deck + company name"] --> MEM
-    OUT["Outbound OSINT: GitHub, OpenAlex, Hacker News, PatentsView, Semantic Scholar"] --> CAND["Outbound Candidate (preliminary)"]
-    CAND -->|"human activates, invites to apply"| IN
-    OUT -.evidence.-> MEM
-    MEM[("Memory: source artifacts, observations, claims, evidence, Founder Score")] --> SCR
-    SCR["Screening: 3 independent axes (Founder, Market, Idea-vs-Market) + per-claim Trust + calibrated Confidence"] --> DIL["Diligence: verify, contradictions, gaps"]
-    DIL --> MEMO["Investment memo + recommendation + confidence band"]
-    MEMO --> HUMAN{{"Human decision: 100K yes / no"}}
-```
+![How FounderLookup thinks: source the founder, resolve identity, build the evidence graph, screen on three independent axes, compute honest confidence, write a cited brief, and a human decides](docs/flow.png)
 
 > The designed pipeline. See **What's built** for today's scope: the outbound path runs end to end on fakes; inbound intake and canonical Memory persistence are aimed.
 
