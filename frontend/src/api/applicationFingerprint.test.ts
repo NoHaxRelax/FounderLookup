@@ -28,4 +28,15 @@ describe('applicationPayloadFingerprint', () => {
       await applicationPayloadFingerprint('jade systems', second),
     )
   })
+
+  it('changes when optional applicant details change so retries cannot replay stale metadata', async () => {
+    const first = new File(['same bytes'], 'deck.pdf', { type: 'application/pdf' })
+    const second = new File(['same bytes'], 'deck.pdf', { type: 'application/pdf' })
+
+    await expect(
+      applicationPayloadFingerprint('Jade Systems', first, '{"website":"https://first.example"}'),
+    ).resolves.not.toBe(
+      await applicationPayloadFingerprint('Jade Systems', second, '{"website":"https://second.example"}'),
+    )
+  })
 })

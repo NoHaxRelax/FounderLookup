@@ -41,6 +41,7 @@ from __future__ import annotations
 import os
 from typing import Literal, TypeVar
 
+import httpx
 import openai
 from openai import AsyncOpenAI
 from openai.types.shared_params import Reasoning
@@ -88,10 +89,46 @@ class OpenAIReasoner:
         *,
         model: str = DEFAULT_MODEL,
         effort: Effort = DEFAULT_EFFORT,
+        max_output_tokens: int = 2_000,
+        timeout_seconds: float = 30.0,
     ) -> None:
+        if max_output_tokens < 1:
+            raise ValueError("max_output_tokens must be positive")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
         self._client = client
         self._model = model
         self._effort = effort
+        self._max_output_tokens = max_output_tokens
+        self._timeout_seconds = timeout_seconds
+
+    @classmethod
+    def from_api_key(
+        cls,
+        api_key: str,
+        *,
+        model: str = DEFAULT_MODEL,
+        effort: Effort = DEFAULT_EFFORT,
+        max_output_tokens: int = 2_000,
+        timeout_seconds: float = 30.0,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> OpenAIReasoner:
+        """Build from a server-side secret without retaining it outside the SDK client."""
+
+        if not api_key.strip():
+            raise MissingApiKeyError("OPENAI_API_KEY is not set in the environment")
+        provider = (
+            AsyncOpenAI(api_key=api_key)
+            if http_client is None
+            else AsyncOpenAI(api_key=api_key, http_client=http_client)
+        )
+        return cls(
+            provider,
+            model=model,
+            effort=effort,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
 
     @classmethod
     def from_env(
@@ -99,6 +136,8 @@ class OpenAIReasoner:
         *,
         model: str = DEFAULT_MODEL,
         effort: Effort = DEFAULT_EFFORT,
+        max_output_tokens: int = 2_000,
+        timeout_seconds: float = 30.0,
     ) -> OpenAIReasoner:
         """Build a reasoner from ``OPENAI_API_KEY`` without ever logging or echoing it.
 
@@ -109,7 +148,13 @@ class OpenAIReasoner:
             key = os.environ["OPENAI_API_KEY"]
         except KeyError:
             raise MissingApiKeyError("OPENAI_API_KEY is not set in the environment") from None
-        return cls(AsyncOpenAI(api_key=key), model=model, effort=effort)
+        return cls.from_api_key(
+            key,
+            model=model,
+            effort=effort,
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+        )
 
     async def extract(
         self,
@@ -130,8 +175,10 @@ class OpenAIReasoner:
                 reasoning=Reasoning(effort=self._effort),
                 instructions=instructions,
                 input=content,
+                max_output_tokens=self._max_output_tokens,
                 store=False,
                 text_format=schema,
+                timeout=self._timeout_seconds,
             )
         except openai.OpenAIError as error:
             raise ReasonerError(

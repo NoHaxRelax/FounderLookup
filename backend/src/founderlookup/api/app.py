@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response as FastAPIResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from founderlookup import __version__
 from founderlookup.api.errors import APIProblem, ProblemDetails, install_exception_handlers
@@ -43,6 +43,7 @@ from founderlookup.api.security import (
     InvestorPrincipal,
 )
 from founderlookup.api.settings import APISettings
+from founderlookup.application.live_screening import LiveScreeningCoordinatorPort
 from founderlookup.application.models import (
     ApplicationReceipt,
     CandidateCollection,
@@ -52,10 +53,16 @@ from founderlookup.application.models import (
     OpportunityDetail,
     OutboundCandidateView,
     OutreachRecord,
+    PipelineRunView,
     QueryResult,
     RunAccepted,
 )
-from founderlookup.application.ports import ApplicationIntakePort, IntakeSubmission
+from founderlookup.application.ports import (
+    ApplicationFounderProfile,
+    ApplicationIntakePort,
+    ApplicationSubmittedMetadata,
+    IntakeSubmission,
+)
 from founderlookup.application.service import FakeVCBrainService
 from founderlookup.application.sourcing import (
     SourcingCoordinatorPort,
@@ -68,11 +75,12 @@ from founderlookup.domain.lifecycles import (
     ScreeningCaseStatus,
 )
 from founderlookup.domain.query import OpportunityQueryPlan
-from founderlookup.domain.runs import PipelineRun
 from founderlookup.ingestion.intake import DeckTooLargeError
 from founderlookup.screening.query_planner import QueryPlannerPort
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
+_MAX_FOUNDERS_JSON_BYTES = 32_768
+_FOUNDER_PROFILES = TypeAdapter(tuple[ApplicationFounderProfile, ...])
 _PROBLEM_RESPONSES: dict[int | str, dict[str, object]] = {
     401: {"model": ProblemDetails, "description": "Authentication or capability denied"},
     409: {"model": ProblemDetails, "description": "Command conflicts with current state"},
@@ -97,6 +105,7 @@ def create_app(
     application_extraction: Callable[[str], Awaitable[None]] | None = None,
     sourcing_coordinator: SourcingCoordinatorPort | None = None,
     query_planner: QueryPlannerPort | None = None,
+    live_screening_coordinator: LiveScreeningCoordinatorPort | None = None,
 ) -> FastAPI:
     """Compose the transport; intake fails closed unless the safe service is wired."""
 
@@ -204,6 +213,15 @@ def create_app(
             str | None,
             Form(min_length=1, max_length=128),
         ] = None,
+        website: Annotated[str | None, Form(min_length=9, max_length=2_048)] = None,
+        one_line_pitch: Annotated[str | None, Form(min_length=1, max_length=1_000)] = None,
+        location: Annotated[str | None, Form(min_length=1, max_length=500)] = None,
+        stage: Annotated[str | None, Form(min_length=1, max_length=500)] = None,
+        contact_email: Annotated[str | None, Form(min_length=3, max_length=320)] = None,
+        founders: Annotated[
+            str | None,
+            Form(min_length=2, max_length=_MAX_FOUNDERS_JSON_BYTES),
+        ] = None,
     ) -> ApplicationReceipt:
         rate_limiter.check(
             bucket="application-intake",
@@ -225,6 +243,9 @@ def create_app(
         if len(content) > configured.maximum_deck_bytes:
             raise DeckTooLargeError
         try:
+            if founders is not None and len(founders.encode()) > _MAX_FOUNDERS_JSON_BYTES:
+                raise ValueError("founder metadata exceeds the bounded JSON byte limit")
+            founder_profiles = () if founders is None else _FOUNDER_PROFILES.validate_json(founders)
             submission = IntakeSubmission(
                 company_name=company_name,
                 display_name=deck.filename or "deck.pdf",
@@ -232,8 +253,16 @@ def create_app(
                 deck_content=content,
                 idempotency_key=idempotency_key,
                 canonical_company_id=canonical_company_id,
+                metadata=ApplicationSubmittedMetadata(
+                    website=website,
+                    one_line_pitch=one_line_pitch,
+                    location=location,
+                    stage=stage,
+                    contact_email=contact_email,
+                    founders=founder_profiles,
+                ),
             )
-        except ValidationError as error:
+        except (ValidationError, ValueError) as error:
             raise APIProblem(
                 status=422,
                 code="invalid_application_submission",
@@ -532,9 +561,14 @@ def create_app(
     async def screen_opportunity(
         opportunity_id: str,
         response: Response,
+        background_tasks: BackgroundTasks,
         _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
     ) -> RunAccepted:
-        accepted = vc_brain.start_screening(opportunity_id)
+        if live_screening_coordinator is None:
+            accepted = vc_brain.start_screening(opportunity_id)
+        else:
+            accepted = live_screening_coordinator.enqueue(opportunity_id)
+            background_tasks.add_task(live_screening_coordinator.execute, accepted.run_id)
         response.headers["Location"] = accepted.status_url
         return accepted
 
@@ -563,7 +597,7 @@ def create_app(
 
     @application.get(
         "/api/v1/runs/{run_id}",
-        response_model=PipelineRun,
+        response_model=PipelineRunView,
         tags=["runs"],
         summary="Get observable pipeline-run state",
         responses=_PROBLEM_RESPONSES,
@@ -571,8 +605,8 @@ def create_app(
     async def run_status(
         run_id: str,
         _principal: Annotated[InvestorPrincipal, Depends(require_investor)],
-    ) -> PipelineRun:
-        return vc_brain.get_run(run_id)
+    ) -> PipelineRunView:
+        return vc_brain.get_run_view(run_id)
 
     @application.post(
         "/api/v1/runs/{run_id}/retry",

@@ -84,9 +84,7 @@ def _extraction_payload() -> dict[str, object]:
                 "public_profile_url": "https://showcase.example/people/ada",
                 "evidence": {
                     "line_number": 4,
-                    "excerpt": (
-                        "Participants: [Ada Demo](https://showcase.example/people/ada)"
-                    ),
+                    "excerpt": ("Participants: [Ada Demo](https://showcase.example/people/ada)"),
                 },
             }
         ],
@@ -98,9 +96,7 @@ def _extraction_payload() -> dict[str, object]:
                 "url": "https://github.com/example/signal-forge",
                 "evidence": {
                     "line_number": 5,
-                    "excerpt": (
-                        "Repository: [GitHub](https://github.com/example/signal-forge)"
-                    ),
+                    "excerpt": ("Repository: [GitHub](https://github.com/example/signal-forge)"),
                 },
             },
             {
@@ -163,9 +159,7 @@ def _response(payload: dict[str, object]) -> httpx.Response:
                 {
                     "type": "message",
                     "role": "assistant",
-                    "content": [
-                        {"type": "output_text", "text": json.dumps(payload)}
-                    ],
+                    "content": [{"type": "output_text", "text": json.dumps(payload)}],
                 }
             ],
             "usage": {"input_tokens": 400, "output_tokens": 250, "total_tokens": 650},
@@ -222,10 +216,7 @@ async def test_responses_request_is_strict_bounded_stateless_and_projects_exact_
     assert result.projection.event_name.value == "Alpine AI Hack 2026"
     assert result.projection.event_locator is not None
     assert result.projection.event_locator.locator == "line:2"
-    assert (
-        result.projection.participants[0].identity_state
-        is IdentityReviewState.NEEDS_REVIEW
-    )
+    assert result.projection.participants[0].identity_state is IdentityReviewState.NEEDS_REVIEW
     assert result.contact_projection is not None
     assert [item.value for item in result.contact_projection.routes] == [
         "https://signal-forge.example/",
@@ -267,8 +258,9 @@ async def test_hallucinated_url_is_rejected_after_schema_validation() -> None:
 
 
 @pytest.mark.anyio
-async def test_non_public_artifact_is_blocked_before_network_even_with_private_flag_elsewhere(
-) -> None:
+async def test_non_public_artifact_is_blocked_before_network_even_with_private_flag_elsewhere() -> (
+    None
+):
     called = False
 
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -285,9 +277,7 @@ async def test_non_public_artifact_is_blocked_before_network_even_with_private_f
         ).extract(
             PublicPageStructuredRequest(
                 request_id="structured-request:private",
-                source_artifact=_artifact(
-                    classification=DataClassification.FOUNDER_PRIVATE
-                ),
+                source_artifact=_artifact(classification=DataClassification.FOUNDER_PRIVATE),
                 content=PUBLIC_MARKDOWN,
             )
         )
@@ -342,9 +332,7 @@ async def test_refusal_is_safe_and_does_not_parse_provider_text() -> None:
 
 
 def test_validated_public_contacts_become_candidate_claim_evidence() -> None:
-    extraction = OpenAIPublicPageExtraction.model_validate_json(
-        json.dumps(_extraction_payload())
-    )
+    extraction = OpenAIPublicPageExtraction.model_validate_json(json.dumps(_extraction_payload()))
     from founderlookup.ingestion.openai_structured import (
         project_validated_openai_extraction,
     )
@@ -371,7 +359,4 @@ def test_validated_public_contacts_become_candidate_claim_evidence() -> None:
     ]
     assert all(item.status == "asserted_unverified" for item in projected.claims)
     assert all(item.trust.state.value == "unscored" for item in projected.claims)
-    assert all(
-        item.observed_value.state is KnowledgeState.KNOWN
-        for item in projected.observations
-    )
+    assert all(item.observed_value.state is KnowledgeState.KNOWN for item in projected.observations)

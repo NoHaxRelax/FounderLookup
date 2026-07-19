@@ -60,9 +60,7 @@ def test_demo_seed_is_idempotent_and_returns_complete_stable_handles() -> None:
     assert second == first
     assert first.inbound_application_id == "demo:application:fictional-inbound-001"
     assert first.inbound_ingestion_run_id == "demo:run:fictional-inbound-ingestion-001"
-    assert first.inbound_source_artifact_id == (
-        "demo:source-artifact:fictional-inbound-deck-001"
-    )
+    assert first.inbound_source_artifact_id == ("demo:source-artifact:fictional-inbound-deck-001")
     assert len(service.thesis_history()) == 1
     assert len(service.list_candidates().items) == 1
     assert len(service.list_opportunities().items) == 1
@@ -121,8 +119,7 @@ def test_demo_inbound_opportunity_is_cited_screened_and_awaits_human_action() ->
     assert set(assessment.claim_ids) == {claim.claim_id for claim in detail.claims}
     assert set(assessment.evidence_ids) == {evidence.evidence_id for evidence in detail.evidence}
     assert all(
-        evidence.locator.kind is SourceLocatorKind.DOCUMENT_PAGE
-        for evidence in detail.evidence
+        evidence.locator.kind is SourceLocatorKind.DOCUMENT_PAGE for evidence in detail.evidence
     )
     assert {evidence.locator.locator.split("#", 1)[0] for evidence in detail.evidence} == {
         "page:0",
@@ -131,8 +128,7 @@ def test_demo_inbound_opportunity_is_cited_screened_and_awaits_human_action() ->
         "page:3",
     }
     assert all(
-        evidence.source_event_time.state is KnowledgeState.UNKNOWN
-        for evidence in detail.evidence
+        evidence.source_event_time.state is KnowledgeState.UNKNOWN for evidence in detail.evidence
     )
     assert all(
         evidence.availability is ArtifactAvailability.ACCESS_RESTRICTED

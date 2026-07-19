@@ -123,6 +123,14 @@ class PatentsViewPatentSource:
 
             patents = decode_json(response.body).get("patents")
             if not isinstance(patents, list):
+                failures.append(
+                    CollectionFailure(
+                        operation_id=operation_id,
+                        safe_code="invalid_provider_payload",
+                        safe_message="patent source returned an invalid discovery payload",
+                        retryable=True,
+                    )
+                )
                 continue
             for raw in patents[: retrieval.max_results]:
                 if not isinstance(raw, dict):
@@ -204,6 +212,16 @@ class PatentsViewPatentSource:
             )
 
         if response.status == 200:
+            patents = decode_json(response.body).get("patents")
+            if not isinstance(patents, list) or not patents:
+                return self._acquisition_failure(
+                    request,
+                    AcquisitionStatus.FAILED,
+                    operation_id,
+                    "invalid_provider_payload",
+                    "patent source returned an invalid acquisition payload",
+                    retryable=True,
+                )
             return AcquisitionResult(
                 result_id=f"{_ADAPTER_ID}:acquisition:{request.acquisition_request_id}",
                 acquisition_request_id=request.acquisition_request_id,

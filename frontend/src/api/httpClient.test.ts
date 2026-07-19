@@ -216,6 +216,42 @@ describe('HttpFounderLookupClient /api/v1 boundary', () => {
       founderStatusUrl: '#/apply/status/secret%2Fwith%20slash',
       replayed: false,
     })
+
+    await client.submitApplication({
+      companyName: 'Jade Systems',
+      deck,
+      idempotencyKey: 'attempt-2',
+      website: 'https://jade.example',
+      oneLinePitch: 'A concise pitch.',
+      location: 'Zurich',
+      stage: 'pre-seed',
+      contactEmail: 'hello@jade.example',
+      founders: [{
+        fullName: 'Ada Rivera',
+        roleTitle: 'CEO',
+        email: 'ada@jade.example',
+        linkedinUrl: 'https://www.linkedin.com/in/ada-rivera',
+        githubUrl: 'https://github.com/adarivera',
+        previousCompanies: ['Acme', 'Northstar'],
+        background: 'Built production infrastructure.',
+      }],
+    })
+
+    const optionalForm = fetchMock.mock.calls[1]?.[1]?.body as FormData
+    expect(optionalForm.get('website')).toBe('https://jade.example')
+    expect(optionalForm.get('one_line_pitch')).toBe('A concise pitch.')
+    expect(optionalForm.get('location')).toBe('Zurich')
+    expect(optionalForm.get('stage')).toBe('pre-seed')
+    expect(optionalForm.get('contact_email')).toBe('hello@jade.example')
+    expect(JSON.parse(String(optionalForm.get('founders')))).toEqual([{
+      full_name: 'Ada Rivera',
+      role_title: 'CEO',
+      email: 'ada@jade.example',
+      linkedin_url: 'https://www.linkedin.com/in/ada-rivera',
+      github_url: 'https://github.com/adarivera',
+      previous_companies: ['Acme', 'Northstar'],
+      background: 'Built production infrastructure.',
+    }])
   })
 
   it('activates the real outbound-candidate resource with only the edited draft', async () => {

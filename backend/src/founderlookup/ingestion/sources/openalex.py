@@ -104,8 +104,7 @@ class OpenAlexResearchSource:
             per_page = min(retrieval.max_results, _MAX_PER_PAGE)
             query = urllib.parse.quote(retrieval.query, safe="")
             url = (
-                f"{_API_ROOT}/authors?search={query}&per-page={per_page}"
-                f"{self._mailto_suffix('&')}"
+                f"{_API_ROOT}/authors?search={query}&per-page={per_page}{self._mailto_suffix('&')}"
             )
             operation_id = f"{_ADAPTER_ID}:discover:{retrieval.retrieval_request_id}"
             try:

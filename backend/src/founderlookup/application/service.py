@@ -18,10 +18,15 @@ from enum import StrEnum
 from threading import RLock
 from typing import Final
 
+from founderlookup.application.application_metadata import (
+    ApplicationMetadataProjection,
+    project_application_metadata,
+)
 from founderlookup.application.deck_evidence import (
     DeckEvidenceProjection,
     project_deck_evidence,
 )
+from founderlookup.application.inbound_intelligence import compose_inbound_analysis_snapshot
 from founderlookup.application.models import (
     ApplicationReceipt,
     CandidateCollection,
@@ -97,6 +102,7 @@ from founderlookup.domain.common import (
 from founderlookup.domain.evidence import SourceArtifact, SourceCategory
 from founderlookup.domain.lifecycles import (
     ApplicationStatus,
+    AssessmentMode,
     DecisionReadinessStatus,
     OpportunityOrigin,
     OutboundCandidateStatus,
@@ -113,6 +119,13 @@ from founderlookup.domain.runs import (
 )
 from founderlookup.domain.scoring import CoverageLevel, CoverageSummary
 from founderlookup.ingestion.extraction import PdfExtractionResult
+from founderlookup.screening.inbound_analysis import AnalysisRequest
+from founderlookup.screening.inbound_graph import (
+    InboundAnalysisRunResult,
+    InboundStageAudit,
+    StageName,
+)
+from founderlookup.screening.live_analyses import InboundAnalysisSnapshot, MemoIdentity
 from founderlookup.screening.query_executor import (
     DeterministicQueryExecutor,
     OpportunityQueryRecord,
@@ -197,6 +210,17 @@ class _OpportunityState:
     decisions: list[Decision] = field(default_factory=list)
     run_ids: list[str] = field(default_factory=list)
     deck_evidence_projection: DeckEvidenceProjection | None = None
+    application_metadata_projection: ApplicationMetadataProjection | None = None
+
+
+@dataclass(frozen=True)
+class LiveScreeningContext:
+    """Preallocated canonical identities and immutable input for one live run."""
+
+    request: AnalysisRequest
+    snapshot: InboundAnalysisSnapshot
+    fallback_assessment: AssessmentEnvelope
+    opportunity_id: str
 
 
 class FakeVCBrainService:
@@ -245,6 +269,7 @@ class FakeVCBrainService:
         self._runs: dict[str, PipelineRun] = {}
         self._sourcing_audits_by_run: dict[str, SourcingLoopAuditView] = {}
         self._retry_by_parent: dict[str, str] = {}
+        self._live_screenings: dict[str, LiveScreeningContext] = {}
 
     def _id(self) -> str:
         return self._id_factory()
@@ -336,6 +361,7 @@ class FakeVCBrainService:
                 source_artifact_id=self._id(),
                 source_artifact_sha256=content_sha256,
                 received_at=now,
+                company_name=normalized_name,
             )
             self._idempotency[idempotency_key] = (fingerprint, accepted)
             self._runs[accepted.run_id] = self._completed_run(
@@ -440,6 +466,17 @@ class FakeVCBrainService:
                     updated_at=accepted.received_at,
                     outbound_candidate_id=outbound_candidate_id,
                     run_ids=list(dict.fromkeys((*candidate_run_ids, accepted.run_id))),
+                    application_metadata_projection=(
+                        project_application_metadata(
+                            application_id=accepted.application_id,
+                            company_id=accepted.company_id,
+                            company_name=accepted.company_name,
+                            metadata=accepted.metadata,
+                            received_at=accepted.received_at,
+                        )
+                        if accepted.company_name is not None
+                        else None
+                    ),
                 )
                 self._opportunities[opportunity.opportunity_id] = opportunity
                 self._application_opportunities[accepted.application_id] = (
@@ -568,8 +605,7 @@ class FakeVCBrainService:
                 raise NotFoundError("Application projection context was not found")
             if (
                 application.accepted.company_id != opportunity.company_id
-                or application.accepted.source_artifact_id
-                != source_artifact.source_artifact_id
+                or application.accepted.source_artifact_id != source_artifact.source_artifact_id
                 or application.artifact.content_sha256 != source_artifact.content_sha256
             ):
                 raise ConflictError("Application projection context does not match accepted intake")
@@ -608,6 +644,20 @@ class FakeVCBrainService:
             opportunity.deck_evidence_projection = projection
             opportunity.updated_at = max(opportunity.updated_at, projection.projected_at)
             return projection
+
+    def application_metadata_projection(
+        self, application_id: str
+    ) -> ApplicationMetadataProjection | None:
+        """Return immutable founder-submitted provenance for persistence/composition."""
+
+        with self._lock:
+            opportunity_id = self._application_opportunities.get(application_id)
+            opportunity = (
+                self._opportunities.get(opportunity_id) if opportunity_id is not None else None
+            )
+            if opportunity is None:
+                raise NotFoundError("Application metadata context was not found")
+            return opportunity.application_metadata_projection
 
     def record_application_extraction_outcome(
         self,
@@ -913,6 +963,58 @@ class FakeVCBrainService:
             applied_filters=((f"status={status.value}",) if status is not None else ()),
         )
 
+    def publish_candidate_public_contacts(
+        self,
+        candidate_id: str,
+        routes: tuple[PublicContactRouteView, ...],
+    ) -> OutboundCandidateView:
+        """Merge only validated public routes without replacing immutable provenance."""
+
+        with self._lock:
+            candidate = self._candidate(candidate_id)
+            merged = list(candidate.public_contact_routes)
+            by_id = {route.route_id: route for route in merged}
+            for route in routes:
+                existing = by_id.get(route.route_id)
+                if existing is not None and existing != route:
+                    raise ConflictError("public contact route provenance cannot be replaced")
+                if existing is None:
+                    merged.append(route)
+                    by_id[route.route_id] = route
+            if tuple(merged) == candidate.public_contact_routes:
+                return candidate
+            updated = candidate.model_copy(
+                update={"public_contact_routes": tuple(merged), "updated_at": self._now()}
+            )
+            self._candidates[candidate_id] = updated
+            return updated
+
+    def publish_candidate_sourcing_audit(
+        self,
+        candidate_id: str,
+        audit: SourcingLoopAuditView,
+    ) -> OutboundCandidateView:
+        """Expose the latest bounded run summary while preserving a run's immutable audit."""
+
+        if audit.run_id is None:
+            raise ValueError("candidate sourcing audit requires a run identifier")
+        with self._lock:
+            run = self._runs.get(audit.run_id)
+            if run is None or run.kind is not PipelineRunKind.SOURCING:
+                raise ValueError("candidate sourcing audit must reference a sourcing run")
+            existing = self._sourcing_audits_by_run.get(audit.run_id)
+            if existing is not None and existing != audit:
+                raise ConflictError("sourcing audit cannot replace an existing run summary")
+            candidate = self._candidate(candidate_id)
+            self._sourcing_audits_by_run[audit.run_id] = audit
+            if candidate.sourcing_audit == audit:
+                return candidate
+            updated = candidate.model_copy(
+                update={"sourcing_audit": audit, "updated_at": self._now()}
+            )
+            self._candidates[candidate_id] = updated
+            return updated
+
     def start_preliminary_assessment(self, candidate_id: str) -> RunAccepted:
         with self._lock:
             candidate = self._candidate(candidate_id)
@@ -1085,6 +1187,336 @@ class FakeVCBrainService:
             self._runs[run.run_id] = run
             return run
 
+    def queue_live_screening(self, opportunity_id: str) -> RunAccepted:
+        """Preallocate canonical output identities and enqueue one bounded live run."""
+
+        with self._lock:
+            opportunity = self._opportunity(opportunity_id)
+            thesis = self.active_thesis()
+            at = self._now()
+            run_id = self._id()
+            fallback = self._full_assessment(opportunity, thesis, run_id=run_id, at=at)
+            if fallback.memo is None or fallback.recommendation is None:
+                raise ConflictError("full screening did not preallocate memo identities")
+            snapshot = compose_inbound_analysis_snapshot(
+                deck=opportunity.deck_evidence_projection,
+                metadata=opportunity.application_metadata_projection,
+                coverage=fallback.coverage,
+                memo_identity=MemoIdentity(
+                    opportunity_id=opportunity.opportunity_id,
+                    screening_case_id=opportunity.screening_case_id,
+                    assessment_id=fallback.assessment_id,
+                    run_id=run_id,
+                    thesis_version=thesis.thesis_version_id,
+                    evidence_as_of=fallback.input_snapshot_as_of,
+                ),
+            )
+            if snapshot.input_snapshot_id != fallback.input_snapshot_id:
+                raise ConflictError("prepared live snapshot identity is inconsistent")
+            request = AnalysisRequest(
+                request_id=f"analysis-request:{run_id}",
+                input_snapshot_id=snapshot.input_snapshot_id,
+                subject=SubjectRef(
+                    kind=EntityKind.OPPORTUNITY,
+                    subject_id=opportunity.opportunity_id,
+                ),
+                mode=AssessmentMode.FULL,
+            )
+            queued = PipelineRun(
+                run_id=run_id,
+                kind=PipelineRunKind.SCREENING,
+                status=PipelineRunStatus.QUEUED,
+                versions=fallback.versions,
+                input_snapshot_id=snapshot.input_snapshot_id,
+                input_snapshot_as_of=fallback.input_snapshot_as_of,
+                queued_at=at,
+                stages=tuple(
+                    PipelineStage(
+                        stage_key=stage_key,
+                        status=PipelineStageStatus.QUEUED,
+                        queued_at=at,
+                    )
+                    for stage_key in (
+                        "canonical_snapshot",
+                        "live_intelligence",
+                        "accept_analysis",
+                    )
+                ),
+            )
+            self._runs[run_id] = queued
+            self._live_screenings[run_id] = LiveScreeningContext(
+                request=request,
+                snapshot=snapshot,
+                fallback_assessment=fallback,
+                opportunity_id=opportunity.opportunity_id,
+            )
+            opportunity.run_ids.append(run_id)
+            opportunity.screening_status = ScreeningCaseStatus.SCREENING
+            opportunity.updated_at = at
+            return self._accepted(queued)
+
+    def live_screening_context(self, run_id: str) -> LiveScreeningContext:
+        """Return the immutable prepared input to the runtime coordinator."""
+
+        with self._lock:
+            try:
+                return self._live_screenings[run_id]
+            except KeyError:
+                raise NotFoundError("live screening context was not found") from None
+
+    def mark_live_screening_running(self, run_id: str) -> PipelineRun:
+        with self._lock:
+            context = self.live_screening_context(run_id)
+            run = self._runs[run_id]
+            if run.status is not PipelineRunStatus.QUEUED:
+                return run
+            now = self._now()
+            running = run.model_copy(
+                update={
+                    "status": PipelineRunStatus.RUNNING,
+                    "started_at": now,
+                    "stages": tuple(
+                        stage.model_copy(
+                            update={
+                                "status": PipelineStageStatus.RUNNING,
+                                "started_at": now,
+                            }
+                        )
+                        for stage in run.stages
+                    ),
+                }
+            )
+            # Force full validation of model_copy updates at the publication boundary.
+            running = PipelineRun.model_validate_json(running.model_dump_json())
+            self._runs[context.fallback_assessment.run_id] = running
+            return running
+
+    def accept_live_screening(
+        self,
+        run_id: str,
+        result: InboundAnalysisRunResult,
+    ) -> AssessmentEnvelope:
+        """Validate and accept graph proposals under the preallocated canonical IDs."""
+
+        with self._lock:
+            context = self.live_screening_context(run_id)
+            if result.request != context.request:
+                raise ConflictError("live analysis result does not match its prepared request")
+            base = context.fallback_assessment
+            if base.memo is None or base.recommendation is None:
+                raise ConflictError("prepared full assessment is incomplete")
+
+            def axis_updates(proposed) -> dict[str, object]:  # type: ignore[no-untyped-def]
+                return {
+                    "rating": proposed.rating,
+                    "trend": proposed.trend,
+                    "confidence": proposed.confidence,
+                    "coverage": proposed.coverage,
+                    "supporting_claim_ids": proposed.supporting_claim_ids,
+                    "counter_claim_ids": proposed.counter_claim_ids,
+                    "open_questions": proposed.open_questions,
+                }
+
+            axes = IndependentAxes(
+                founder=FounderAxisAssessment.model_validate_json(
+                    base.axes.founder.model_copy(
+                        update=axis_updates(result.founder.founder_read)
+                    ).model_dump_json()
+                ),
+                market=MarketAxisAssessment.model_validate_json(
+                    base.axes.market.model_copy(
+                        update=axis_updates(result.market.market_read)
+                    ).model_dump_json()
+                ),
+                idea_vs_market=IdeaVsMarketAxisAssessment.model_validate_json(
+                    base.axes.idea_vs_market.model_copy(
+                        update=axis_updates(result.idea.idea_read)
+                    ).model_dump_json()
+                ),
+            )
+            now = self._now()
+            memo = InvestmentMemo.model_validate_json(
+                base.memo.model_copy(
+                    update={
+                        "sections": result.memo.memo.sections,
+                        "generated_at": now,
+                    }
+                ).model_dump_json()
+            )
+            recommendation = Recommendation.model_validate_json(
+                base.recommendation.model_copy(
+                    update={
+                        "action": result.memo.recommendation.action,
+                        "reasons": result.memo.recommendation.reasons,
+                        "next_actions": result.memo.recommendation.next_actions,
+                        "created_at": now,
+                    }
+                ).model_dump_json()
+            )
+            versions = VersionManifest(
+                components=(
+                    *base.versions.components,
+                    ComponentVersion(
+                        component=VersionComponent.MODEL,
+                        version_id="gpt-5.6-luna",
+                        name="inbound-intelligence",
+                    ),
+                    ComponentVersion(
+                        component=VersionComponent.PROMPT,
+                        version_id="inbound-analysis-prompts.v1",
+                        name="inbound-intelligence",
+                    ),
+                    ComponentVersion(
+                        component=VersionComponent.TOOL,
+                        version_id="inbound-langgraph.v1",
+                        name="inbound-intelligence",
+                    ),
+                )
+            )
+            candidate = base.model_copy(
+                update={
+                    "versions": versions,
+                    "axes": axes,
+                    "contradictions": result.adversarial.contradictions,
+                    "memo": memo,
+                    "recommendation": recommendation,
+                    "created_at": now,
+                }
+            )
+            assessment = AssessmentEnvelope.model_validate_json(candidate.model_dump_json())
+            self._publish_live_screening(context, assessment, result.audit)
+            return assessment
+
+    def accept_live_screening_failure(
+        self, run_id: str, *, safe_code: str = "live_intelligence_failed"
+    ) -> AssessmentEnvelope:
+        """Accept the prevalidated deterministic assessment after an unexpected graph failure."""
+
+        with self._lock:
+            context = self.live_screening_context(run_id)
+            stages: tuple[StageName, ...] = (
+                "market",
+                "idea",
+                "founder",
+                "adversarial",
+                "memo",
+            )
+            audit = tuple(
+                InboundStageAudit(
+                    stage=stage,
+                    status="fallback",
+                    safe_code=safe_code,
+                )
+                for stage in stages
+            )
+            self._publish_live_screening(context, context.fallback_assessment, audit)
+            return context.fallback_assessment
+
+    def _publish_live_screening(
+        self,
+        context: LiveScreeningContext,
+        assessment: AssessmentEnvelope,
+        audit: tuple[InboundStageAudit, ...],
+    ) -> None:
+        opportunity = self._opportunity(context.opportunity_id)
+        run = self._runs[assessment.run_id]
+        if opportunity.assessments and opportunity.assessments[-1].run_id == assessment.run_id:
+            if opportunity.assessments[-1] == assessment:
+                return
+            raise ConflictError("accepted live assessment cannot be replaced")
+        now = self._now()
+        fallback_items = tuple(item for item in audit if item.status == "fallback")
+        failures = tuple(
+            PipelineFailure(
+                failure_id=self._id(),
+                stage_key="live_intelligence",
+                safe_code=item.safe_code or "live_stage_fallback",
+                safe_message=(
+                    f"The {item.stage} specialist failed closed to deterministic output."
+                ),
+                retryable=True,
+                occurred_at=now,
+            )
+            for item in fallback_items
+        )
+        accepted_output_ids = tuple(
+            item
+            for item in (
+                assessment.assessment_id,
+                assessment.memo.memo_id if assessment.memo is not None else None,
+                (
+                    assessment.recommendation.recommendation_id
+                    if assessment.recommendation is not None
+                    else None
+                ),
+            )
+            if item is not None
+        )
+        stages = (
+            PipelineStage(
+                stage_key="canonical_snapshot",
+                status=PipelineStageStatus.SUCCEEDED,
+                queued_at=run.queued_at,
+                started_at=run.started_at or now,
+                completed_at=now,
+                accepted_output_ids=(run.input_snapshot_id,),
+            ),
+            PipelineStage(
+                stage_key="live_intelligence",
+                status=(PipelineStageStatus.FAILED if failures else PipelineStageStatus.SUCCEEDED),
+                queued_at=run.queued_at,
+                started_at=run.started_at or now,
+                completed_at=now,
+                failure_ids=tuple(item.failure_id for item in failures),
+            ),
+            PipelineStage(
+                stage_key="accept_analysis",
+                status=PipelineStageStatus.SUCCEEDED,
+                queued_at=run.queued_at,
+                started_at=run.started_at or now,
+                completed_at=now,
+                accepted_output_ids=accepted_output_ids,
+            ),
+        )
+        terminal = PipelineRun(
+            run_id=run.run_id,
+            kind=run.kind,
+            status=(
+                PipelineRunStatus.PARTIALLY_SUCCEEDED if failures else PipelineRunStatus.SUCCEEDED
+            ),
+            versions=assessment.versions,
+            input_snapshot_id=run.input_snapshot_id,
+            input_snapshot_as_of=run.input_snapshot_as_of,
+            queued_at=run.queued_at,
+            started_at=run.started_at or now,
+            completed_at=now,
+            stages=stages,
+            accepted_output_ids=accepted_output_ids,
+            failures=failures,
+        )
+        self._runs[run.run_id] = terminal
+        opportunity.assessments.append(assessment)
+        opportunity.screening_status = (
+            ScreeningCaseStatus.BLOCKED
+            if assessment.decision_readiness is None
+            or assessment.decision_readiness.status is DecisionReadinessStatus.BLOCKED
+            else ScreeningCaseStatus.READINESS_REVIEW
+        )
+        opportunity.updated_at = now
+        application = self._applications.get(opportunity.application_id)
+        if application is not None:
+            application.status = application.status.model_copy(
+                update={
+                    "stage": (
+                        FounderFacingStage.NEEDS_INFORMATION
+                        if opportunity.screening_status is ScreeningCaseStatus.BLOCKED
+                        else FounderFacingStage.UNDER_REVIEW
+                    ),
+                    "last_updated_at": now,
+                    "next_action": "A human investor must review the cited Recommendation.",
+                }
+            )
+
     def start_screening(self, opportunity_id: str) -> RunAccepted:
         with self._lock:
             opportunity = self._opportunity(opportunity_id)
@@ -1133,6 +1565,13 @@ class FakeVCBrainService:
         with self._lock:
             try:
                 return self._runs[run_id]
+            except KeyError as error:
+                raise NotFoundError("pipeline run was not found") from error
+
+    def get_run_view(self, run_id: str) -> PipelineRunView:
+        with self._lock:
+            try:
+                return self._run_view(self._runs[run_id])
             except KeyError as error:
                 raise NotFoundError("pipeline run was not found") from error
 
@@ -1462,12 +1901,19 @@ class FakeVCBrainService:
             raise ValueError(f"limit must be between 1 and {_MAX_COLLECTION_LIMIT}")
         return limit
 
-    @staticmethod
-    def _accepted(run: PipelineRun) -> RunAccepted:
+    def _run_view(self, run: PipelineRun) -> PipelineRunView:
+        return PipelineRunView.model_validate(
+            {
+                **run.model_dump(mode="python"),
+                "sourcing_audit": self._sourcing_audits_by_run.get(run.run_id),
+            }
+        )
+
+    def _accepted(self, run: PipelineRun) -> RunAccepted:
         return RunAccepted(
             run_id=run.run_id,
             status_url=f"/api/v1/runs/{run.run_id}",
-            run=run,
+            run=self._run_view(run),
         )
 
     @staticmethod
@@ -1523,35 +1969,35 @@ class FakeVCBrainService:
             projection.axis_rubric_version if projection is not None else "fake-axis-rubric.v0"
         )
         components = [
-                ComponentVersion(
-                    component=VersionComponent.THESIS,
-                    version_id=thesis_version,
-                ),
-                ComponentVersion(
-                    component=VersionComponent.DETERMINISTIC_RULES,
-                    version_id="fake-rules.v0",
-                ),
-                ComponentVersion(
-                    component=VersionComponent.FOUNDER_SCORE,
-                    version_id=founder_score_version,
-                ),
-                ComponentVersion(
-                    component=VersionComponent.AXIS_RUBRIC,
-                    version_id=axis_rubric_version,
-                ),
-                ComponentVersion(
-                    component=VersionComponent.DECISION_READINESS_POLICY,
-                    version_id="fake-readiness.v0",
-                ),
-                ComponentVersion(
-                    component=VersionComponent.MEMO,
-                    version_id="fake-memo.v0",
-                ),
-                ComponentVersion(
-                    component=VersionComponent.RECOMMENDATION,
-                    version_id="fake-recommendation.v0",
-                ),
-            ]
+            ComponentVersion(
+                component=VersionComponent.THESIS,
+                version_id=thesis_version,
+            ),
+            ComponentVersion(
+                component=VersionComponent.DETERMINISTIC_RULES,
+                version_id="fake-rules.v0",
+            ),
+            ComponentVersion(
+                component=VersionComponent.FOUNDER_SCORE,
+                version_id=founder_score_version,
+            ),
+            ComponentVersion(
+                component=VersionComponent.AXIS_RUBRIC,
+                version_id=axis_rubric_version,
+            ),
+            ComponentVersion(
+                component=VersionComponent.DECISION_READINESS_POLICY,
+                version_id="fake-readiness.v0",
+            ),
+            ComponentVersion(
+                component=VersionComponent.MEMO,
+                version_id="fake-memo.v0",
+            ),
+            ComponentVersion(
+                component=VersionComponent.RECOMMENDATION,
+                version_id="fake-recommendation.v0",
+            ),
+        ]
         if deck_projection is not None:
             components.append(
                 ComponentVersion(
@@ -1798,6 +2244,7 @@ class FakeVCBrainService:
         assessment_id = self._id()
         application = self._applications.get(opportunity.application_id)
         deck_projection = opportunity.deck_evidence_projection
+        metadata_projection = opportunity.application_metadata_projection
         candidate = (
             self._candidates.get(opportunity.outbound_candidate_id)
             if opportunity.outbound_candidate_id is not None
@@ -1847,8 +2294,7 @@ class FakeVCBrainService:
         )
         founder_identity_known = opportunity.founder_id.state is KnowledgeState.KNOWN
         analysis_sections_unknown = any(
-            section.kind
-            in {MemoSectionKind.INVESTMENT_HYPOTHESES, MemoSectionKind.SWOT}
+            section.kind in {MemoSectionKind.INVESTMENT_HYPOTHESES, MemoSectionKind.SWOT}
             and section.content.state is not KnowledgeState.KNOWN
             for section in memo_sections
         )
@@ -1890,9 +2336,7 @@ class FakeVCBrainService:
                 )
             )
 
-        contradictions = (
-            deck_projection.contradictions if deck_projection is not None else ()
-        )
+        contradictions = deck_projection.contradictions if deck_projection is not None else ()
         if contradictions:
             checks.append(
                 ReadinessCheck(
@@ -1981,11 +2425,7 @@ class FakeVCBrainService:
             screening_case_id=opportunity.screening_case_id,
             policy_version="fake-readiness.v0",
             evaluated_at=at,
-            status=(
-                DecisionReadinessStatus.BLOCKED
-                if blockers
-                else DecisionReadinessStatus.READY
-            ),
+            status=(DecisionReadinessStatus.BLOCKED if blockers else DecisionReadinessStatus.READY),
             checks=tuple(checks),
             blockers=tuple(blockers),
         )
@@ -2021,9 +2461,7 @@ class FakeVCBrainService:
             next_action = "Request the individual founder names and roles."
         elif analysis_sections_unknown:
             recommendation_action = RecommendationAction.NEEDS_INFORMATION
-            recommendation_summary = (
-                "Required analytical memo sections remain explicitly Unknown."
-            )
+            recommendation_summary = "Required analytical memo sections remain explicitly Unknown."
             recommendation_claim_ids = ()
             next_action = "Complete cited Investment Hypotheses and SWOT analysis."
         else:
@@ -2054,6 +2492,31 @@ class FakeVCBrainService:
             next_actions=(next_action,),
             created_at=at,
         )
+        accepted_claims = tuple(
+            (
+                *(deck_projection.claims if deck_projection is not None else ()),
+                *(metadata_projection.claims if metadata_projection is not None else ()),
+            )
+        )
+        accepted_evidence = tuple(
+            (
+                *(deck_projection.evidence if deck_projection is not None else ()),
+                *(metadata_projection.evidence if metadata_projection is not None else ()),
+            )
+        )
+        snapshot_components = tuple(
+            item
+            for item in (
+                deck_projection.projection_id if deck_projection is not None else None,
+                metadata_projection.projection_id if metadata_projection is not None else None,
+            )
+            if item is not None
+        )
+        input_snapshot_id = (
+            f"snapshot:{hashlib.sha256('|'.join(snapshot_components).encode()).hexdigest()[:24]}"
+            if snapshot_components
+            else self._id()
+        )
         return AssessmentEnvelope(
             assessment_id=assessment_id,
             assessment_version_id=self._id(),
@@ -2071,9 +2534,7 @@ class FakeVCBrainService:
                 projection,
                 deck_projection,
             ),
-            input_snapshot_id=(
-                deck_projection.projection_id if deck_projection is not None else self._id()
-            ),
+            input_snapshot_id=input_snapshot_id,
             input_snapshot_as_of=at,
             coverage=coverage,
             deterministic_results=self._thesis_rule_results(thesis),
@@ -2083,16 +2544,8 @@ class FakeVCBrainService:
                 else KnowledgeValue.unknown("founder_identity_unresolved")
             ),
             axes=(projection.axes if projection is not None else self._axes(coverage)),
-            claim_ids=(
-                tuple(claim.claim_id for claim in deck_projection.claims)
-                if deck_projection is not None
-                else ()
-            ),
-            evidence_ids=(
-                tuple(evidence.evidence_id for evidence in deck_projection.evidence)
-                if deck_projection is not None
-                else ()
-            ),
+            claim_ids=tuple(claim.claim_id for claim in accepted_claims),
+            evidence_ids=tuple(evidence.evidence_id for evidence in accepted_evidence),
             contradictions=contradictions,
             diligence_actions=tuple(diligence_actions),
             decision_readiness=readiness,
@@ -2141,6 +2594,12 @@ class FakeVCBrainService:
         assessments = tuple(state.assessments)
         memos = tuple(item.memo for item in assessments if item.memo is not None)
         deck_projection = state.deck_evidence_projection
+        metadata_projection = state.application_metadata_projection
+        candidate = (
+            self._candidates.get(state.outbound_candidate_id)
+            if state.outbound_candidate_id is not None
+            else None
+        )
         return OpportunityDetail(
             opportunity_id=state.opportunity_id,
             origin=state.origin,
@@ -2153,13 +2612,23 @@ class FakeVCBrainService:
             latest_assessment=latest,
             assessment_history=assessments,
             claims=(
-                deck_projection.claims
-                if include_claims and deck_projection is not None
+                tuple(
+                    (
+                        *(deck_projection.claims if deck_projection is not None else ()),
+                        *(metadata_projection.claims if metadata_projection is not None else ()),
+                    )
+                )
+                if include_claims
                 else ()
             ),
             evidence=(
-                deck_projection.evidence
-                if include_evidence and deck_projection is not None
+                tuple(
+                    (
+                        *(deck_projection.evidence if deck_projection is not None else ()),
+                        *(metadata_projection.evidence if metadata_projection is not None else ()),
+                    )
+                )
+                if include_evidence
                 else ()
             ),
             latest_memo=(latest.memo if latest is not None else None),
@@ -2167,6 +2636,10 @@ class FakeVCBrainService:
             latest_recommendation=(latest.recommendation if latest is not None else None),
             human_decisions=tuple(state.decisions),
             related_run_ids=tuple(state.run_ids),
+            public_contact_routes=(
+                candidate.public_contact_routes if candidate is not None else ()
+            ),
+            sourcing_audit=(candidate.sourcing_audit if candidate is not None else None),
             timing=OpportunityTiming(
                 started_at=state.started_at,
                 last_updated_at=state.updated_at,

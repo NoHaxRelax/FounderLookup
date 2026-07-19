@@ -19,7 +19,6 @@ import {
   Form,
   Input,
   Modal,
-  Progress,
   Select,
   Space,
   Tag,
@@ -55,6 +54,29 @@ const outcomeTone: Record<CandidateSummary['overallMatch'], BadgeTone> = {
   mismatch: 'critical',
   unknown: 'warning',
   not_evaluated: 'neutral',
+}
+
+const axisTone = (axis: CandidateSummary['axes'][number]): BadgeTone => {
+  if (['strong', 'bullish', 'viable'].includes(axis.rating)) return 'positive'
+  if (['weak', 'bear'].includes(axis.rating)) return 'critical'
+  if (axis.rating === 'unknown') return 'neutral'
+  return 'warning'
+}
+
+const recommendationLabel: Record<NonNullable<CandidateSummary['recommendation']>, string> = {
+  activate: 'Activate candidate',
+  advance: 'Advance to diligence',
+  needs_information: 'Request focused information',
+  manual_review: 'Complete manual review',
+  do_not_pursue: 'Do not pursue',
+}
+
+const recommendationTone: Record<NonNullable<CandidateSummary['recommendation']>, BadgeTone> = {
+  activate: 'positive',
+  advance: 'positive',
+  needs_information: 'warning',
+  manual_review: 'warning',
+  do_not_pursue: 'critical',
 }
 
 const ACTIVATION_FAILURE_MESSAGE =
@@ -583,66 +605,69 @@ export function SourcingWorkspace({
             {search.results.map((candidate) => (
               <li key={candidate.id}>
                 <article className="candidate-card">
-                  <Card
-                    className="candidate-card__surface"
-                    title={<h3>{candidate.companyName}</h3>}
-                    extra={
-                      candidate.coveragePercent === null ? (
-                        <div className="coverage-unknown"><strong>Unknown</strong><span>coverage</span></div>
-                      ) : (
-                        <Progress
-                          type="circle"
-                          percent={candidate.coveragePercent}
-                          size={68}
-                          aria-label={`${candidate.coveragePercent}% evidence coverage`}
-                        />
-                      )
-                    }
-                  >
-                    <Space wrap size="small">
-                      <StatusBadge tone={candidate.origin === 'inbound' ? 'info' : 'neutral'}>
-                        {candidate.origin}
-                      </StatusBadge>
-                      <StatusBadge tone={outcomeTone[candidate.overallMatch]}>
-                        {candidate.overallMatch.replaceAll('_', ' ')}
-                      </StatusBadge>
-                      {candidate.incomplete && <StatusBadge tone="warning" pending>Incomplete</StatusBadge>}
-                    </Space>
-                    <p><KnowledgeState value={candidate.founderName} compact /></p>
-                    <Typography.Paragraph className="queue-reason">{candidate.queueReason}</Typography.Paragraph>
-                    <Descriptions
-                      className="candidate-metadata"
-                      size="small"
-                      column={{ xs: 1, sm: 2 }}
-                      items={[
-                        { key: 'trigger', label: 'Trigger', children: candidate.trigger },
-                        { key: 'workflow', label: 'Workflow', children: candidate.workflowState },
-                        { key: 'freshness', label: 'Freshness', children: candidate.freshnessLabel },
-                        { key: 'timing', label: 'Timing', children: candidate.elapsedLabel },
-                      ]}
-                    />
-                    <div className="axis-strip" aria-label="Independent assessment axes">
-                      {candidate.axes.map((axis) => (
-                        <Card key={axis.key} size="small">
-                          <span>{axis.label}</span><strong>{axis.rating}</strong>
-                        </Card>
-                      ))}
+                  <Card className="candidate-card__surface">
+                    <header className="candidate-card__header">
+                      <div className="candidate-card__identity">
+                        <Space wrap size="small">
+                          <StatusBadge tone={candidate.origin === 'inbound' ? 'info' : 'neutral'}>
+                            {candidate.origin === 'inbound' ? 'Inbound' : 'Outbound'}
+                          </StatusBadge>
+                          <StatusBadge tone={candidate.incomplete ? 'warning' : 'positive'} pending={candidate.incomplete}>
+                            {candidate.incomplete ? 'Review incomplete' : 'Review complete'}
+                          </StatusBadge>
+                        </Space>
+                        <h3>{candidate.companyName}</h3>
+                        <p className="candidate-founder">
+                          <span>Founder</span>
+                          <KnowledgeState value={candidate.founderName} compact />
+                        </p>
+                        <p className="candidate-source">
+                          <span>Source</span>
+                          {candidate.origin === 'inbound'
+                            ? 'Founder-submitted application'
+                            : 'Bounded public sourcing'}
+                        </p>
+                      </div>
+                      <div className="candidate-coverage" aria-label={candidate.coverageLabel}>
+                        <strong>{candidate.coveragePercent === null ? 'Unknown' : `${candidate.coveragePercent}%`}</strong>
+                        <span>Evidence coverage</span>
+                      </div>
+                    </header>
+
+                    <div className="candidate-first-read">
+                      <section className="candidate-thesis" aria-label="Thesis match">
+                        <p className="summary-label">Thesis match</p>
+                        <StatusBadge tone={outcomeTone[candidate.overallMatch]}>
+                          {candidate.overallMatch.replaceAll('_', ' ')}
+                        </StatusBadge>
+                        <p>{candidate.thesisFitLabel}</p>
+                      </section>
+
+                      <section className="candidate-axes" aria-label="Three independent assessment axes">
+                        <p className="summary-label">Three independent axes · never averaged</p>
+                        <div className="axis-strip">
+                          {candidate.axes.map((axis) => (
+                            <div className="axis-summary-chip" key={axis.key}>
+                              <span>{axis.label}</span>
+                              <StatusBadge tone={axisTone(axis)}>{axis.rating}</StatusBadge>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="candidate-next-action" aria-label="Readiness and next action">
+                        <p className="summary-label">Next human action</p>
+                        {candidate.recommendation ? (
+                          <StatusBadge tone={recommendationTone[candidate.recommendation]}>
+                            {recommendationLabel[candidate.recommendation]}
+                          </StatusBadge>
+                        ) : (
+                          <StatusBadge>Awaiting Recommendation</StatusBadge>
+                        )}
+                        <p>{candidate.queueReason}</p>
+                      </section>
                     </div>
-                    {candidate.unknownFields.length > 0 && (
-                      <Alert
-                        className="unknown-row"
-                        type="info"
-                        showIcon
-                        icon={<QuestionCircleOutlined />}
-                        title={<span><strong>Unknown:</strong> {candidate.unknownFields.join(', ')}</span>}
-                      />
-                    )}
-                    {candidate.origin === 'outbound' && (
-                      <PublicContactPanel
-                        routes={candidate.publicContactRoutes}
-                        loopAudit={candidate.sourcingLoopAudit}
-                      />
-                    )}
+
                     <div className="candidate-card__actions">
                       <Space wrap>
                         {candidate.origin === 'outbound' &&
@@ -676,6 +701,64 @@ export function SourcingWorkspace({
                         <Typography.Text type="secondary">Opportunity not created</Typography.Text>
                       )}
                     </div>
+
+                    <Collapse
+                      className="candidate-disclosures"
+                      items={[
+                        {
+                          key: 'understand',
+                          label: 'Understand this queue position',
+                          extra: <Tag>{candidate.axes.length} axes · {candidate.contradictionCount} contradictions</Tag>,
+                          children: (
+                            <div className="candidate-understand">
+                              <p>{candidate.queueReason}</p>
+                              <ul>
+                                {candidate.axes.map((axis) => (
+                                  <li key={axis.key}>
+                                    <strong>{axis.label}:</strong> {axis.trendLabel} · {axis.coverageLabel}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ),
+                        },
+                        {
+                          key: 'audit',
+                          label: 'Audit source, timing, unknowns, and contact',
+                          extra: <Tag>{candidate.unknownFields.length} unknown</Tag>,
+                          children: (
+                            <div className="candidate-audit">
+                              <Descriptions
+                                className="candidate-metadata"
+                                size="small"
+                                column={{ xs: 1, sm: 2 }}
+                                items={[
+                                  { key: 'trigger', label: 'Trigger', children: candidate.trigger },
+                                  { key: 'workflow', label: 'Workflow', children: candidate.workflowState },
+                                  { key: 'freshness', label: 'Freshness', children: candidate.freshnessLabel },
+                                  { key: 'timing', label: 'Timing', children: candidate.elapsedLabel },
+                                ]}
+                              />
+                              {candidate.unknownFields.length > 0 && (
+                                <Alert
+                                  className="unknown-row"
+                                  type="info"
+                                  showIcon
+                                  icon={<QuestionCircleOutlined />}
+                                  title={<span><strong>Unknown:</strong> {candidate.unknownFields.join(', ')}</span>}
+                                />
+                              )}
+                              {candidate.origin === 'outbound' && (
+                                <PublicContactPanel
+                                  routes={candidate.publicContactRoutes}
+                                  loopAudit={candidate.sourcingLoopAudit}
+                                />
+                              )}
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
                   </Card>
                 </article>
               </li>

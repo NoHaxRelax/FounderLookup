@@ -109,9 +109,13 @@ class RecordCategory(StrEnum):
     CLAIM = "claim"
     CONTRADICTION = "contradiction"
     DECK_EVIDENCE_PROJECTION = "deck_evidence_projection"
+    APPLICATION_METADATA_PROJECTION = "application_metadata_projection"
     FOUNDER_SCORE_SNAPSHOT = "founder_score_snapshot"
     PIPELINE_RUN = "pipeline_run"
     MEMO = "memo"
+    ASSESSMENT = "assessment"
+    RECOMMENDATION = "recommendation"
+    INBOUND_ANALYSIS_AUDIT = "inbound_analysis_audit"
 
 
 JsonObject = Mapping[str, object]
@@ -435,9 +439,7 @@ class SQLiteMemory:
         with self.transaction() as transaction:
             return tuple(transaction.append(record) for record in records)
 
-    def append_many_idempotent(
-        self, records: Sequence[NewRecord]
-    ) -> tuple[StoredRecord, ...]:
+    def append_many_idempotent(self, records: Sequence[NewRecord]) -> tuple[StoredRecord, ...]:
         """Atomically append immutable records, accepting exact deterministic replays."""
 
         with self.transaction() as transaction:

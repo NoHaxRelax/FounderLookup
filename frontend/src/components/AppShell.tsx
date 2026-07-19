@@ -6,7 +6,7 @@ import {
   SearchOutlined,
   SolutionOutlined,
 } from '@ant-design/icons'
-import { Badge, Button, Drawer, Layout, Menu, Typography, type MenuProps } from 'antd'
+import { Button, Drawer, Layout, Menu, type MenuProps } from 'antd'
 import { useState, type ReactNode } from 'react'
 
 export type AppRoute = 'home' | 'sourcing' | 'opportunity' | 'memo' | 'apply'
@@ -95,7 +95,6 @@ export interface AppShellProps {
 
 export function InvestorShell({
   route,
-  runtime,
   opportunityId,
   onLock,
   children,
@@ -129,36 +128,16 @@ export function InvestorShell({
             className="primary-menu"
           />
         </nav>
-        <div className="sidebar-note">
-          <Badge status={runtime === 'fixture' ? 'success' : 'processing'} />
-          <div>
-            <Typography.Text strong>
-              {runtime === 'fixture'
-                ? 'Fixture workspace'
-                : onLock
-                  ? 'Protected API workspace'
-                  : 'Local API workspace'}
-            </Typography.Text>
-            {onLock && (
-              <Button
-                className="lock-workspace-button"
-                type="text"
-                size="small"
-                icon={<LockOutlined aria-hidden="true" />}
-                onClick={onLock}
-              >
-                Lock workspace
-              </Button>
-            )}
-            <Typography.Text type="secondary">
-              {runtime === 'fixture'
-                ? 'Deterministic · no provider calls'
-                : onLock
-                  ? 'Session key · never bundled'
-                  : 'Same-origin · proxied to FastAPI'}
-            </Typography.Text>
-          </div>
-        </div>
+        {onLock && (
+          <Button
+            className="sidebar-lock-button"
+            type="text"
+            icon={<LockOutlined aria-hidden="true" />}
+            onClick={onLock}
+          >
+            Lock workspace
+          </Button>
+        )}
       </aside>
 
       <Layout.Content id="main-content" className="main-content" tabIndex={-1}>
@@ -182,6 +161,19 @@ export function InvestorShell({
             className="primary-menu"
           />
         </nav>
+        {onLock && (
+          <Button
+            className="sidebar-lock-button"
+            type="text"
+            icon={<LockOutlined aria-hidden="true" />}
+            onClick={() => {
+              setMenuOpen(false)
+              onLock()
+            }}
+          >
+            Lock workspace
+          </Button>
+        )}
       </Drawer>
     </Layout>
   )

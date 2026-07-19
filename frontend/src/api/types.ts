@@ -449,8 +449,24 @@ export interface ApplicationInput {
   companyName: string
   deck: File
   idempotencyKey: string
+  website?: string
+  oneLinePitch?: string
+  location?: string
+  stage?: string
+  contactEmail?: string
+  founders?: ApplicationFounderInput[]
   /** Links an application to an already-known outbound candidate when the founder used that path. */
   outboundCandidateId?: StableId
+}
+
+export interface ApplicationFounderInput {
+  fullName: string
+  roleTitle?: string
+  email?: string
+  linkedinUrl?: string
+  githubUrl?: string
+  previousCompanies?: string[]
+  background?: string
 }
 
 export interface ApplicationReceipt {

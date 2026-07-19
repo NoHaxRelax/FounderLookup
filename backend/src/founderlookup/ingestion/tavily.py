@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
-from typing import Final
+from typing import Final, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -61,6 +61,8 @@ class TavilyPolicy:
     max_content_bytes: int = 500_000
     max_response_bytes: int = 2_000_000
     timeout_seconds: float = 20.0
+    search_depth: Literal["advanced", "basic", "fast", "ultra-fast"] = "advanced"
+    extract_depth: Literal["advanced", "basic"] = "advanced"
     allowed_domains: tuple[str, ...] = ()
     excluded_domains: tuple[str, ...] = ()
 
@@ -79,6 +81,10 @@ class TavilyPolicy:
             raise ValueError("Tavily max_results cannot exceed 20")
         if self.max_pages > self.max_results:
             raise ValueError("Tavily max_pages cannot exceed max_results")
+        if self.search_depth not in {"advanced", "basic", "fast", "ultra-fast"}:
+            raise ValueError("Tavily search_depth is unsupported")
+        if self.extract_depth not in {"advanced", "basic"}:
+            raise ValueError("Tavily extract_depth is unsupported")
         allowed = tuple(_normalize_domain(item) for item in self.allowed_domains)
         excluded = tuple(_normalize_domain(item) for item in self.excluded_domains)
         if set(allowed) & set(excluded):
@@ -213,7 +219,7 @@ class TavilySource:
             max_results = min(retrieval.max_results, self._policy.max_results)
             payload: dict[str, object] = {
                 "query": query,
-                "search_depth": "basic",
+                "search_depth": self._policy.search_depth,
                 "max_results": max_results,
                 "include_answer": False,
                 "include_raw_content": False,
@@ -391,7 +397,7 @@ class TavilySource:
             "/extract",
             {
                 "urls": [original_url],
-                "extract_depth": "basic",
+                "extract_depth": self._policy.extract_depth,
                 "format": "markdown",
                 "include_images": False,
             },

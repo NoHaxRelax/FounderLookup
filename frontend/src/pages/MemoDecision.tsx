@@ -40,7 +40,7 @@ interface MemoDecisionProps {
 }
 
 const decisions: Array<{ value: DecisionDisposition; label: string; detail: string }> = [
-  { value: 'advance', label: 'Advance', detail: 'Move to the next human diligence stage.' },
+  { value: 'advance', label: 'Advance with accepted risk', detail: 'Continue to human diligence and preserve the open risks.' },
   { value: 'request_more_information', label: 'Request more information', detail: 'Resolve a bounded Evidence gap.' },
   { value: 'hold', label: 'Hold', detail: 'Keep the Opportunity open without progressing it.' },
   { value: 'decline', label: 'Decline', detail: 'Close this Opportunity with a recorded rationale.' },
@@ -48,6 +48,11 @@ const decisions: Array<{ value: DecisionDisposition; label: string; detail: stri
 
 const DECISION_FAILURE_MESSAGE =
   'The Decision was not recorded. No workflow state changed, and your rationale is still available.'
+
+const sentenceCase = (value: string) => {
+  const normalized = value.replaceAll('_', ' ').trim()
+  return normalized ? normalized.charAt(0).toLocaleUpperCase() + normalized.slice(1) : normalized
+}
 
 export function MemoDecision({ client, opportunity, previewState, announce }: MemoDecisionProps) {
   const suggestedRationale =
@@ -60,11 +65,15 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
   const [saving, setSaving] = useState(false)
   const [decisionError, setDecisionError] = useState('')
   const [confirmationOpen, setConfirmationOpen] = useState(false)
+  // The fixture is the judge-facing demo: expose the safe human command immediately.
+  // HTTP remains progressively disclosed because it can mutate persisted state.
+  const [decisionFormOpen, setDecisionFormOpen] = useState(client.runtime === 'fixture')
 
   const canAdvance =
     opportunity.screeningCase.readiness === 'ready' ||
     opportunity.screeningCase.readiness === 'ready_with_accepted_risk'
-  const availableDecisions = canAdvance ? decisions : decisions.filter((item) => item.value !== 'advance')
+  const canOverrideInDemo = client.runtime === 'fixture'
+  const availableDecisions = canAdvance || canOverrideInDemo ? decisions : decisions.filter((item) => item.value !== 'advance')
   const materialWarnings = [
     ...opportunity.contradictions.map((item) => item.summary),
     ...opportunity.diligenceActions,
@@ -83,7 +92,7 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
 
   const openConfirmation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (disposition === 'advance' && !canAdvance) {
+    if (disposition === 'advance' && !canAdvance && !canOverrideInDemo) {
       announce('Advance is unavailable until Decision Readiness is Ready.')
       return
     }
@@ -128,7 +137,7 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Memo &amp; human Decision</p>
+          <p className="eyebrow">Review &amp; decide</p>
           <h1 data-page-title tabIndex={-1}>{opportunity.company.name}</h1>
           <p className="lede">
             Memo {opportunity.memo.version} · Evidence as of {new Date(opportunity.memo.evidenceAsOf).toLocaleString()}
@@ -140,17 +149,19 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
       {previewState === 'blocked' && <StatePanel state="blocked" entityLabel="investment memo" />}
 
       <section className="memo-act" aria-labelledby="decision-action-title">
-        <p className="eyebrow">Act</p>
+        <p className="eyebrow">Recommendation</p>
         <div className="decision-summary-grid">
-          <Card className="recommendation-card" title={<span><QuestionCircleOutlined /> System Recommendation</span>}>
+          <Card className="recommendation-card">
+            <h2 className="decision-card-heading"><QuestionCircleOutlined aria-hidden="true" /> System Recommendation</h2>
             <StatusBadge tone={canAdvance ? 'positive' : 'warning'}>
-              Readiness {opportunity.screeningCase.readiness.replaceAll('_', ' ')}
+              Readiness {sentenceCase(opportunity.screeningCase.readiness)}
             </StatusBadge>
-            <h2>{opportunity.recommendation.action.replaceAll('_', ' ')}</h2>
+            <h3>{sentenceCase(opportunity.recommendation.action)}</h3>
             <p>{opportunity.recommendation.summary}</p>
-            <p className="muted">Advisory only · this is not the human Decision.</p>
+            <p className="muted">Advisory only. You make the final decision.</p>
           </Card>
-          <Card className="blocker-summary" title={`Evidence gaps and contradictions (${materialWarnings.length})`}>
+          <Card className="blocker-summary">
+            <h2 className="decision-card-heading">Evidence gaps and contradictions ({materialWarnings.length})</h2>
             {materialWarnings.length > 0 ? (
               <ul>{materialWarnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul>
             ) : (
@@ -159,9 +170,9 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
           </Card>
         </div>
 
-        <Card className="human-decision-card" title={<span><AuditOutlined /> Human Decision</span>}>
-          <h2 id="decision-action-title">Record your disposition</h2>
-          <p>The system Recommendation is advisory. Only this explicit form records a human Decision.</p>
+        <Card className="human-decision-card">
+          <h2 id="decision-action-title" className="decision-card-heading"><AuditOutlined aria-hidden="true" /> Make a decision</h2>
+          <p className="muted">Choose the next step and record why. Nothing is sent and no funds move.</p>
           {receipt ? (
             <Result
               className="decision-receipt"
@@ -186,48 +197,66 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
               description="A real Assessment, memo, and Recommendation are required before a Decision can be recorded."
             />
           ) : (
-            <Form layout="vertical" onSubmitCapture={openConfirmation}>
-              <Form.Item label="Disposition" htmlFor="decision-disposition" required>
-                <Radio.Group
-                  id="decision-disposition"
-                  className="decision-options"
-                  value={disposition}
-                  onChange={(event) => setDisposition(event.target.value as DecisionDisposition)}
-                >
-                  <Space orientation="vertical">
-                    {availableDecisions.map((decision) => (
-                      <Radio key={decision.value} value={decision.value}>
-                        <span className="decision-option__copy"><strong>{decision.label}</strong><small>{decision.detail}</small></span>
-                      </Radio>
-                    ))}
-                  </Space>
-                </Radio.Group>
-              </Form.Item>
-              {!canAdvance && (
-                <Alert type="info" showIcon title="Advance is unavailable until Decision Readiness is Ready or Ready with accepted risk." />
+            <div className="decision-entry">
+              {client.runtime !== 'fixture' && (
+                <div className="decision-entry__prompt">
+                  <div>
+                    <strong>Ready for an explicit human command</strong>
+                    <p>Choose a disposition and record the evidence-backed rationale only when you are ready.</p>
+                  </div>
+                  <Button
+                    type="primary"
+                    aria-expanded={decisionFormOpen}
+                    aria-controls="human-decision-form"
+                    onClick={() => setDecisionFormOpen((open) => !open)}
+                  >
+                    {decisionFormOpen ? 'Close Decision form' : 'Start human Decision'}
+                  </Button>
+                </div>
               )}
-              <Form.Item
-                label="Rationale"
-                htmlFor="decision-rationale"
-                required
-                extra="Required · preserved with the reviewed Assessment and memo identifiers."
-              >
-                <Input.TextArea
-                  id="decision-rationale"
-                  rows={4}
-                  required
-                  minLength={12}
-                  value={rationale}
-                  aria-invalid={Boolean(decisionError && !confirmationOpen)}
-                  onChange={(event) => {
-                    setRationale(event.target.value)
-                    setDecisionError('')
-                  }}
-                />
-              </Form.Item>
-              {decisionError && !confirmationOpen && <Alert type="error" showIcon title="Decision not ready for review" description={decisionError} />}
-              <Button type="primary" htmlType="submit">Review Decision</Button>
-            </Form>
+
+              {decisionFormOpen && (
+                <Form id="human-decision-form" className="human-decision-form" layout="vertical" onSubmitCapture={openConfirmation}>
+                  <label className="decision-field-label" htmlFor="decision-disposition"><span aria-hidden="true">*</span> Choose a disposition</label>
+                  <Form.Item className="decision-disposition-field">
+                    <Radio.Group
+                      id="decision-disposition"
+                      className="decision-options"
+                      value={disposition}
+                      onChange={(event) => setDisposition(event.target.value as DecisionDisposition)}
+                    >
+                      <Space orientation="vertical">
+                        {availableDecisions.map((decision) => (
+                          <Radio key={decision.value} value={decision.value}>
+                            <span className="decision-option__copy"><strong>{decision.label}</strong><small>{decision.detail}</small></span>
+                          </Radio>
+                        ))}
+                      </Space>
+                    </Radio.Group>
+                  </Form.Item>
+                  {!canAdvance && !canOverrideInDemo && <p className="decision-policy-note">Advance is hidden until the evidence is decision-ready.</p>}
+                  {!canAdvance && canOverrideInDemo && <p className="decision-policy-note">Demo mode: advancing records explicit accepted risk; it does not send outreach or move funds.</p>}
+                  <label className="decision-field-label" htmlFor="decision-rationale"><span aria-hidden="true">*</span> Rationale</label>
+                  <Form.Item className="decision-rationale-field" extra="Required · preserved with the reviewed Assessment and memo identifiers.">
+                    <Input.TextArea
+                      id="decision-rationale"
+                      aria-label="Rationale"
+                      rows={3}
+                      required
+                      minLength={12}
+                      value={rationale}
+                      aria-invalid={Boolean(decisionError && !confirmationOpen)}
+                      onChange={(event) => {
+                        setRationale(event.target.value)
+                        setDecisionError('')
+                      }}
+                    />
+                  </Form.Item>
+                  {decisionError && !confirmationOpen && <Alert type="error" showIcon title="Decision not ready for review" description={decisionError} />}
+                  <Button type="primary" htmlType="submit">Review and confirm</Button>
+                </Form>
+              )}
+            </div>
           )}
         </Card>
       </section>
@@ -237,8 +266,12 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
           items={[
             {
               key: 'understand',
-              label: <span><SafetyCertificateOutlined /> Understand the Recommendation</span>,
-              extra: <Tag>{opportunity.recommendation.reasons.length} reasons · {opportunity.recommendation.nextActions.length} actions</Tag>,
+              label: (
+                <span className="disclosure-label">
+                  <span><SafetyCertificateOutlined aria-hidden="true" /> Understand the Recommendation</span>
+                  <small>{opportunity.recommendation.reasons.length} reasons · {opportunity.recommendation.nextActions.length} actions</small>
+                </span>
+              ),
               children: (
                 <div className="understand-grid">
                   <div><h3>Why</h3><ul>{opportunity.recommendation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
@@ -250,8 +283,12 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
             },
             {
               key: 'audit',
-              label: <span><BookOutlined /> Audit the cited memo</span>,
-              extra: <Tag>{opportunity.memo.sections.length} required sections · {opportunity.memo.adversarialNotes.length} adversarial notes</Tag>,
+              label: (
+                <span className="disclosure-label">
+                  <span><BookOutlined aria-hidden="true" /> Audit the cited memo</span>
+                  <small>{opportunity.memo.sections.length} required sections · {opportunity.memo.adversarialNotes.length} adversarial notes</small>
+                </span>
+              ),
               children: (
                 <article className="memo-document" aria-labelledby="memo-sections-title">
                   <Card className="memo-document__surface">

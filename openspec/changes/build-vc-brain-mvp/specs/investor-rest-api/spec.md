@@ -239,3 +239,14 @@ The MVP SHALL protect investor, thesis, candidate, opportunity, run, claim, evid
 #### Scenario: Client requests hidden reasoning
 - **WHEN** a client attempts to expand provider prompts, framework state, private chain-of-thought, or credentials
 - **THEN** the service rejects or ignores that unsupported expansion while continuing to expose intended citations, rule results, validation outcomes, and concise rationale
+
+### Requirement: Production demo seeding requires a second acknowledgement
+The executable runtime SHALL keep fictional demo seeding disabled by default. In production mode it MUST reject demo seeding unless both the seed enablement and a separate production-demo acknowledgement are true. Seeded records SHALL remain clearly labeled fictional and MUST NOT be represented as live provider Evidence.
+
+#### Scenario: Production seed lacks acknowledgement
+- **WHEN** production mode enables fictional demo seeding without the separate production-demo acknowledgement
+- **THEN** configuration fails closed before the service creates or exposes seeded records
+
+#### Scenario: Production demo is explicitly acknowledged
+- **WHEN** production mode enables both demo seeding and its production acknowledgement
+- **THEN** the runtime may create the bounded fictional dataset while retaining its fictional provenance and making no provider, OCR, outreach, or Decision call

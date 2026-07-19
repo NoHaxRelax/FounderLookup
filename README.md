@@ -6,20 +6,21 @@ An AI operating system for early-stage venture. It **sources** founders (inbound
 
 ## What's built
 
-The scoring engine is real and green: **330+ tests, every scoring rule adversarially verified**, and the whole outbound pipeline runs end to end on deterministic fakes with **no model and no network**.
+The deterministic scoring and evidence core, durable inbound intake, and bounded outbound pipeline are implemented and covered by a network-free test suite. Live providers remain explicit opt-ins; skipped live checks are never described as passing.
 
-- **Sourcing.** Five free, public-only OSINT adapters (GitHub, OpenAlex, Hacker News, PatentsView, Semantic Scholar) behind provider-neutral ports, plus a natural-language query planner that turns a thesis into a validated Opportunity Query Plan.
+- **Sourcing.** Tavily plus five public source-specific adapters (GitHub, OpenAlex, Hacker News, PatentsView, Semantic Scholar) sit behind provider-neutral ports. A thin LangGraph loop plans, retrieves/structures, assesses Evidence gaps, performs only bounded follow-up rounds, and records why it stopped.
+- **Public showcase extraction.** Optional GPT-5.6 Luna strict Structured Outputs propose event/project/participant, repository/demo/deck, and public contact fields from already acquired PUBLIC pages. Deterministic code accepts only exact source-backed excerpts and safe URLs; participant identity stays unverified and model failure falls back safely.
 - **Identity resolution.** Collapses one founder from many scattered footprints; ambiguous merges go to a human, never a guess.
 - **The judge.** Claim-trust and founder-score rubrics, the three independent axes, and the builder-vs-fundability read that surfaces the exceptional builder a traditional screen filters out.
 - **Confidence, computed not asserted.** Self-consistency dispersion, snap-vs-reasoned divergence, explicit abstention when evidence is thin, a counterfactual identity-swap bias check, and per-subgroup calibration.
 - **Decision.** A conviction threshold and a candidate-keyed preliminary Assessment Envelope, plus an evaluation harness that scores rank agreement, confidence-band coverage, calibration, and lift over a baseline, on fixtures.
-- **Inbound reasoning.** Five framework-neutral analysis interfaces (market, idea novelty, founder dossier, adversarial validation, memo synthesis), wired to **GPT-5.6 Luna via LangGraph** behind the same neutral seam the deterministic fakes use; a live smoke run is the final step.
+- **Inbound.** Company-name-plus-PDF intake, private artifact storage, founder-status capability, bounded Mistral OCR adapter, and five framework-neutral analysis interfaces are present. GPT-5.6 Luna has an optional reasoner adapter behind those interfaces; LangGraph is not part of the inbound domain contract.
 
 ## The flow
 
 ![How FounderLookup thinks: source the founder, resolve identity, build the evidence graph, screen on three independent axes, compute honest confidence, write a cited brief, and a human decides](docs/flow.png)
 
-> The designed pipeline. See **What's built** for today's scope: the outbound path runs end to end on fakes; inbound intake and canonical Memory persistence are aimed.
+> The designed pipeline. Deterministic demo paths are self-contained; real Tavily, OpenAI, Mistral, and deployed-environment checks require explicit opt-in configuration.
 
 ## Principles we don't compromise on
 
@@ -44,7 +45,7 @@ backend/src/founderlookup/
   infrastructure/  # persistence, files, telemetry
 ```
 
-Stack: Python + FastAPI + `uv` + SQLite. Inbound reasoning is wired to **LangGraph + GPT-5.6 Luna** behind framework-neutral interfaces, with deterministic fakes as the default and the demo fallback (a live smoke run is the final step), so the pipeline is reproducible and the model provider is swappable. Mistral OCR is the selected tool for deck extraction; that intake path is aimed. Sourcing anchors free source-specific APIs behind a provider-neutral seam built for later expansion. See `docs/adr/` for the recorded model and orchestration decisions.
+Stack: Python + FastAPI + `uv` + SQLite, with React/TypeScript/Vite on the frontend. GPT-5.6 Luna is optional behind framework-neutral analysis/extraction seams; deterministic fakes and parsers remain the default fallback. LangGraph owns only the bounded outbound retrieval state machine. Mistral OCR is the optional deck page-extractor, and every provider is fail-closed behind server-side configuration. See `docs/adr/` for the recorded boundaries.
 
 ## Getting started
 
@@ -55,6 +56,34 @@ uv run ruff check .    # lint
 uv run mypy src        # type-check
 cp .env.example .env   # then fill in local secrets (OPENAI_API_KEY, MISTRAL_API_KEY)
 ```
+
+## Live-demo and deploy gates
+
+For the fastest self-contained presentation, run the frontend fixture described in
+[`frontend/README.md`](frontend/README.md); it needs no provider, private deck, or network call.
+For the HTTP-connected demo, start FastAPI, set the same investor credential in the backend and
+the Vite proxy, and opt into fictional process-local data with:
+
+```dotenv
+FOUNDERLOOKUP_DEMO_SEED_ENABLED=true
+```
+
+Production mode additionally refuses that seed unless
+`FOUNDERLOOKUP_DEMO_SEED_PRODUCTION_ACKNOWLEDGED=true`. This second flag acknowledges a visibly
+fictional demo dataset; it is not permission to relabel fixtures as live evidence.
+
+Real providers are independent opt-ins. Tavily needs its enable flag and key. GPT-5.6 Luna public
+sourcing extraction additionally needs `FOUNDERLOOKUP_OPENAI_STRUCTURED_ENABLED=true`; that path
+accepts only acquired PUBLIC artifacts even if generic private-analysis settings are enabled.
+Founder-private Mistral OCR stays blocked unless the normal provider controls are confirmed or the
+demo explicitly enables private transfer, a confirmed OCR purpose, and
+`FOUNDERLOOKUP_MISTRAL_OCR_HACKATHON_PRIVATE_RISK_ACCEPTED=true`. The acknowledgement does not
+claim training opt-out, Zero Data Retention, or a processing region.
+
+Opt-in live checks require `FOUNDERLOOKUP_RUN_LIVE_TESTS=1` plus their documented credentials and
+target URL. A skipped live test is not a pass. Railway/Docker commands and the same-origin
+production proxy are documented in [`backend/README.md`](backend/README.md) and
+[`frontend/README.md`](frontend/README.md).
 
 ## Where things live
 

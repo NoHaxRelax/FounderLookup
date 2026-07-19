@@ -361,9 +361,7 @@ def _claims_for_predicate(
 def _claim_evidence_ids(claims: tuple[Claim, ...]) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(
-            evidence_id
-            for claim in claims
-            for evidence_id in claim.supporting_evidence_ids
+            evidence_id for claim in claims for evidence_id in claim.supporting_evidence_ids
         )
     )
 

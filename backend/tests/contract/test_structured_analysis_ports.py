@@ -337,9 +337,7 @@ def test_fake_market_analysis_rejects_an_unsupported_claim_as_fact() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match="unsupported Claim"):
-        asyncio.run(
-            FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request)
-        )
+        asyncio.run(FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request))
 
 
 def test_fake_market_analysis_fails_closed_on_request_mismatch() -> None:
@@ -372,9 +370,7 @@ def test_fake_market_analysis_fails_closed_on_request_mismatch() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match="does not match request"):
-        asyncio.run(
-            FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request)
-        )
+        asyncio.run(FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request))
 
 
 def test_fake_market_analysis_rejects_citation_outside_the_snapshot() -> None:
@@ -407,9 +403,7 @@ def test_fake_market_analysis_rejects_citation_outside_the_snapshot() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match="not present in the request"):
-        asyncio.run(
-            FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request)
-        )
+        asyncio.run(FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request))
 
 
 def test_fake_market_analysis_rejects_claim_outside_the_snapshot() -> None:
@@ -442,9 +436,7 @@ def test_fake_market_analysis_rejects_claim_outside_the_snapshot() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match=r"Claim identifier.*not present"):
-        asyncio.run(
-            FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request)
-        )
+        asyncio.run(FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request))
 
 
 def test_fake_market_analysis_rejects_evidence_linked_to_another_claim() -> None:
@@ -477,9 +469,7 @@ def test_fake_market_analysis_rejects_evidence_linked_to_another_claim() -> None
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match=r"Evidence.*does not belong"):
-        asyncio.run(
-            FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request)
-        )
+        asyncio.run(FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request))
 
 
 def test_supporting_citation_cannot_use_refuting_evidence() -> None:
@@ -536,9 +526,7 @@ def test_supporting_citation_cannot_use_refuting_evidence() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match="supporting Evidence stance"):
-        asyncio.run(
-            FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request)
-        )
+        asyncio.run(FakeMarketAnalysisAdapter({request.request_id: response}).analyze(request))
 
 
 def test_analysis_requires_every_unknown_gap_reference_to_be_declared() -> None:
@@ -551,9 +539,7 @@ def test_analysis_requires_every_unknown_gap_reference_to_be_declared() -> None:
                 MarketFinding(
                     finding_id="finding:unknown-sizing",
                     kind=MarketFindingKind.SIZING_ASSUMPTIONS,
-                    conclusion=KnowledgeValue[str].unknown(
-                        "Bottom-up sizing is not established."
-                    ),
+                    conclusion=KnowledgeValue[str].unknown("Bottom-up sizing is not established."),
                     confidence=KnowledgeValue[float].unknown(
                         "Confidence is unavailable without a conclusion."
                     ),
@@ -826,9 +812,7 @@ def test_adversarial_validation_must_enumerate_every_unsupported_claim() -> None
 
     with pytest.raises(InvalidFakeAnalysisError, match="unsupported Claim inventory"):
         asyncio.run(
-            FakeAdversarialValidationAdapter(
-                {request.request_id: response}
-            ).validate(request)
+            FakeAdversarialValidationAdapter({request.request_id: response}).validate(request)
         )
 
 
@@ -879,9 +863,7 @@ def test_adversarial_validation_rejects_invented_contradiction_citations() -> No
 
     with pytest.raises(InvalidFakeAnalysisError, match="Contradiction citations"):
         asyncio.run(
-            FakeAdversarialValidationAdapter(
-                {request.request_id: response}
-            ).validate(request)
+            FakeAdversarialValidationAdapter({request.request_id: response}).validate(request)
         )
 
 
@@ -931,9 +913,7 @@ def test_memo_opportunity_must_match_the_requested_subject() -> None:
             request_id="request:memo:wrong-opportunity",
             input_snapshot_id="snapshot:1",
             subject=SUBJECT,
-            memo=_required_memo().model_copy(
-                update={"opportunity_id": "opportunity:different"}
-            ),
+            memo=_required_memo().model_copy(update={"opportunity_id": "opportunity:different"}),
             section_citations=_complete_memo_citations(),
             gaps=(),
             contradiction_ids=(),
@@ -1006,9 +986,7 @@ def test_fake_memo_synthesis_rejects_unsupported_factual_claims() -> None:
     memo = _required_memo().model_copy(
         update={
             "sections": tuple(
-                section.model_copy(
-                    update={"material_claim_ids": ("claim:unsupported-tam",)}
-                )
+                section.model_copy(update={"material_claim_ids": ("claim:unsupported-tam",)})
                 for section in _required_memo().sections
             )
         }
@@ -1031,9 +1009,7 @@ def test_fake_memo_synthesis_rejects_unsupported_factual_claims() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match="unsupported Claim"):
-        asyncio.run(
-            FakeMemoSynthesisAdapter({request.request_id: response}).synthesize(request)
-        )
+        asyncio.run(FakeMemoSynthesisAdapter({request.request_id: response}).synthesize(request))
 
 
 def test_fake_memo_synthesis_rejects_mislinked_evidence() -> None:
@@ -1058,9 +1034,7 @@ def test_fake_memo_synthesis_rejects_mislinked_evidence() -> None:
     )
 
     with pytest.raises(InvalidFakeAnalysisError, match=r"Evidence.*does not belong"):
-        asyncio.run(
-            FakeMemoSynthesisAdapter({request.request_id: response}).synthesize(request)
-        )
+        asyncio.run(FakeMemoSynthesisAdapter({request.request_id: response}).synthesize(request))
 
 
 def test_non_known_memo_section_requires_an_explicit_section_gap() -> None:

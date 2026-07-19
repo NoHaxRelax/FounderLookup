@@ -51,16 +51,12 @@ def _artifact() -> SourceArtifact:
         media_type="application/pdf",
         content_sha256=CONTENT_HASH,
         retrieved_at=RETRIEVED_AT,
-        source_event_time=KnowledgeValue[datetime].unknown(
-            "deck effective date is not disclosed"
-        ),
+        source_event_time=KnowledgeValue[datetime].unknown("deck effective date is not disclosed"),
     )
 
 
 def _projection(artifact: SourceArtifact) -> DeckEvidenceProjection:
-    unknown_confidence = KnowledgeValue[float].unknown(
-        "fixture provider omitted page confidence"
-    )
+    unknown_confidence = KnowledgeValue[float].unknown("fixture provider omitted page confidence")
     extraction = PdfExtractionResult(
         extraction_id="pdf-extraction:deck:store-test",
         source_artifact_id=artifact.source_artifact_id,

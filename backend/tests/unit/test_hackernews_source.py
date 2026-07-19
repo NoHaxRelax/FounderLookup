@@ -211,9 +211,7 @@ def test_acquire_not_found_is_failure() -> None:
 def test_acquire_rejects_non_hackernews_url() -> None:
     adapter = HackerNewsSocialSource(RecordedHttpTransport({}), now=_now)
 
-    result = asyncio.run(
-        adapter.acquire(_acquisition_request("https://github.com/octocat"))
-    )
+    result = asyncio.run(adapter.acquire(_acquisition_request("https://github.com/octocat")))
 
     assert result.status is AcquisitionStatus.FAILED
     assert result.failure is not None

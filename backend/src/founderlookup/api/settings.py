@@ -6,7 +6,7 @@ import secrets
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -61,6 +61,8 @@ class APISettings(BaseSettings):
     tavily_max_content_bytes: int = Field(default=500_000, gt=0, le=5_000_000)
     tavily_max_response_bytes: int = Field(default=2_000_000, gt=0, le=10_000_000)
     tavily_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
+    tavily_search_depth: Literal["advanced", "basic", "fast", "ultra-fast"] = "advanced"
+    tavily_extract_depth: Literal["advanced", "basic"] = "advanced"
     tavily_allowed_domains: str = ""
     tavily_excluded_domains: str = "linkedin.com,facebook.com,instagram.com,x.com,twitter.com"
 
@@ -72,6 +74,14 @@ class APISettings(BaseSettings):
     sourcing_cache_ttl_seconds: int = Field(default=900, ge=0, le=86_400)
     sourcing_max_follow_up_rounds: int = Field(default=1, ge=0, le=3)
     sourcing_max_discovery_calls: int = Field(default=12, ge=1, le=32)
+
+    # Direct public pitch-deck bytes use a separate, explicit host policy. Broad Tavily
+    # search never implicitly authorizes a linked URL for PDF download or OCR.
+    public_pdf_allowed_domains: str = ""
+    public_pdf_excluded_domains: str = ""
+    public_pdf_max_bytes: int = Field(default=5_000_000, gt=0, le=10 * 1024 * 1024)
+    public_pdf_timeout_seconds: float = Field(default=30.0, ge=1.0, le=60.0)
+    public_pdf_max_redirects: int = Field(default=5, ge=0, le=5)
 
     # OpenAI is an explicit structured-intelligence opt-in; a key alone never enables it.
     openai_api_key: SecretStr | None = Field(
@@ -86,6 +96,13 @@ class APISettings(BaseSettings):
     openai_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
     openai_allow_private: bool = False
     openai_hackathon_private_risk_accepted: bool = False
+    # Full inbound intelligence is a separate founder-private opt-in. It never follows
+    # from a key or public structured-extraction enablement alone.
+    openai_inbound_enabled: bool = False
+    openai_inbound_effort: Literal["minimal", "low", "medium", "high"] = "low"
+    openai_inbound_max_model_calls: int = Field(default=5, ge=1, le=5)
+    openai_inbound_stage_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    openai_inbound_total_timeout_seconds: float = Field(default=100.0, ge=1.0, le=300.0)
 
     # Source-specific adapters are independently opt-in. GitHub authentication is optional
     # and remains server-side; the other P0 public APIs are keyless.
@@ -132,7 +149,12 @@ class APISettings(BaseSettings):
             return None
         return value
 
-    @field_validator("tavily_allowed_domains", "tavily_excluded_domains")
+    @field_validator(
+        "tavily_allowed_domains",
+        "tavily_excluded_domains",
+        "public_pdf_allowed_domains",
+        "public_pdf_excluded_domains",
+    )
     @classmethod
     def validate_domain_csv(cls, value: str) -> str:
         domains = tuple(item.strip().casefold().rstrip(".") for item in value.split(","))
@@ -179,22 +201,38 @@ class APISettings(BaseSettings):
         if self.sourcing_max_pages > self.sourcing_max_results:
             raise ValueError("sourcing max pages cannot exceed max results")
         if self.openai_structured_enabled and (
-            self.openai_api_key is None
-            or not self.openai_api_key.get_secret_value().strip()
+            self.openai_api_key is None or not self.openai_api_key.get_secret_value().strip()
         ):
             raise ValueError("OpenAI must have a server-side API key when enabled")
+        if self.openai_inbound_enabled and (
+            self.openai_api_key is None or not self.openai_api_key.get_secret_value().strip()
+        ):
+            raise ValueError("OpenAI inbound intelligence requires a server-side API key")
         if not self.openai_model.strip():
             raise ValueError("OpenAI model must be non-blank")
         if self.openai_allow_private and not self.openai_hackathon_private_risk_accepted:
             raise ValueError(
                 "OpenAI private processing requires explicit hackathon risk acceptance"
             )
+        if self.openai_inbound_enabled and not (
+            self.openai_allow_private and self.openai_hackathon_private_risk_accepted
+        ):
+            raise ValueError(
+                "OpenAI inbound intelligence requires explicit private processing and "
+                "hackathon risk acceptance"
+            )
+        if self.openai_inbound_total_timeout_seconds < self.openai_inbound_stage_timeout_seconds:
+            raise ValueError("OpenAI inbound total timeout cannot be shorter than one stage")
         if self.github_token is not None and not self.github_token.get_secret_value().strip():
             raise ValueError("GitHub token must be non-blank when supplied")
         allowed = set(self.tavily_allowed_domain_list)
         excluded = set(self.tavily_excluded_domain_list)
         if allowed & excluded:
             raise ValueError("a Tavily domain cannot be both allowed and excluded")
+        public_pdf_allowed = set(self.public_pdf_allowed_domain_list)
+        public_pdf_excluded = set(self.public_pdf_excluded_domain_list)
+        if public_pdf_allowed & public_pdf_excluded:
+            raise ValueError("a public PDF domain cannot be both allowed and excluded")
         return self
 
     @cached_property
@@ -208,6 +246,14 @@ class APISettings(BaseSettings):
     @cached_property
     def tavily_excluded_domain_list(self) -> tuple[str, ...]:
         return tuple(item for item in self.tavily_excluded_domains.split(",") if item)
+
+    @cached_property
+    def public_pdf_allowed_domain_list(self) -> tuple[str, ...]:
+        return tuple(item for item in self.public_pdf_allowed_domains.split(",") if item)
+
+    @cached_property
+    def public_pdf_excluded_domain_list(self) -> tuple[str, ...]:
+        return tuple(item for item in self.public_pdf_excluded_domains.split(",") if item)
 
     def resolved_investor_token(self) -> str:
         """Missing configuration becomes an inaccessible ephemeral credential."""
