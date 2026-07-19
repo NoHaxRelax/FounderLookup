@@ -56,3 +56,24 @@ Two v0 calibrations worth a glance in the morning (not blockers, logged not park
 `provisional` (present_costly < 2) -- confirm that split is intended; (b) founder score
 can reach exactly 100.0 when all costly positives are FULL; v0 permits it via clamp,
 a v1 may want a cap below 100. No NEEDS ELIAS.
+
+## 2026-07-19, cycle 4
+Task 3.11 (Area of Research 1 confidence method): `screening/confidence.py`, a
+framework-neutral, deterministic, versioned (`ar1-confidence.v0`) estimator over
+caller-supplied score samples, no live model. Three pure entry points:
+`estimate_confidence_band` (robust median point + a coarse band whose WIDTH, never the
+center, absorbs dispersion / thin-coverage / few-sample penalties; a four-factor product
+confidence in [0,1]; explicit reason-coded abstention that never lowers the point),
+`identity_swap_bias_check` (signed median shift under a counterfactual identity swap,
+flagged past a threshold, abstains when a side is empty), and
+`subgroup_calibration_report` (binned expected calibration error per subgroup, small
+subgroups flagged not dropped). Non-finite inputs rejected at the boundary. Own frozen
+dataclasses, no domain model touched. Built as a design-council + adversarial-verify
+workflow; interrupted once by the overnight Windows reboot, then resumed from cache with
+nothing lost. All three invariants hold (720-permutation and multi-hash-seed sweeps).
+42 tests. Gated scoped (a second workflow was concurrently writing founder_reads.py):
+166 green excluding the in-flight file, ruff + mypy clean on the module. Commit 7fafeb9.
+Notes (logged, not blockers): the band is a dispersion interval, not a standard-error
+confidence interval (documented in-module); product-form confidence hits exactly 0 when
+any single channel zeroes, meaning "declined / low support" not "certainly wrong"; the
+bias check is threshold-only, a v1 could compare the shift against pooled spread. No NEEDS ELIAS.
