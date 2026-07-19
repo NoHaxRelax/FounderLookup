@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { FixtureFounderLookupClient } from './api/client'
+import { FounderLookupApiError } from './api/httpClient'
 import type { FounderLookupClient, InvestorAccessController } from './api/types'
 
 describe('FounderLookup starter workflow', () => {
@@ -363,6 +364,7 @@ describe('FounderLookup starter workflow', () => {
 
     expect(screen.getByRole('heading', { name: 'Needs information' })).toBeVisible()
     expect(screen.queryByRole('button', { name: /Decision form/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Choose a disposition' })).toBeVisible()
     expect(screen.getByRole('radio', { name: /Advance with accepted risk/i })).toBeInTheDocument()
     expect(screen.getByText(/Demo mode: advancing records explicit accepted risk/i)).toBeVisible()
     expect(screen.getByRole('button', { name: /Audit the cited memo/i })).toHaveAttribute(
@@ -409,6 +411,42 @@ describe('FounderLookup starter workflow', () => {
       ),
     )
     expect(document.body).not.toHaveTextContent('sensitive persistence failure')
+  })
+
+  it('returns to the investor gateway when the session expires while recording a decision', async () => {
+    const user = userEvent.setup()
+    const fixture = new FixtureFounderLookupClient()
+    let credential = 'expired-key'
+    const investorAccess: InvestorAccessController = {
+      hasCredential: () => Boolean(credential),
+      getCredential: () => credential || undefined,
+      setCredential: (next) => { credential = next },
+      clearCredential: () => { credential = '' },
+    }
+    vi.spyOn(fixture, 'recordDecision').mockRejectedValueOnce(new FounderLookupApiError({
+      type: 'about:blank',
+      title: 'Access denied',
+      status: 401,
+      code: 'investor_authentication_required',
+    }))
+    const client = new Proxy(fixture, {
+      get(target, property) {
+        if (property === 'runtime') return 'http'
+        if (property === 'investorAccess') return investorAccess
+        const value = Reflect.get(target, property)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as unknown as FounderLookupClient
+    globalThis.location.hash = '#/memo'
+
+    render(<App client={client} />)
+    await screen.findByRole('heading', { name: 'Sable Systems', level: 1 })
+    await user.click(screen.getByRole('button', { name: 'Review and confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Record Decision · no funds move' }))
+
+    expect(await screen.findByRole('heading', { name: 'Enter your access key' })).toBeVisible()
+    expect(screen.getByText('Your investor session expired. Enter the access key again.')).toBeVisible()
+    expect(credential).toBe('')
   })
 
   it('keeps founder routes public and outside the investor shell', async () => {

@@ -222,6 +222,14 @@ export default function App({ client = fixtureClient }: AppProps) {
     setAccessRevision((revision) => revision + 1)
   }
 
+  const expireInvestorWorkspace = () => {
+    investorAccess?.clearCredential()
+    setWorkspace(null)
+    setOpportunity(null)
+    setAccessError('Your investor session expired. Enter the access key again.')
+    setAccessRevision((revision) => revision + 1)
+  }
+
   const liveRegion = (
     <div className="visually-hidden" aria-live="polite" aria-atomic="true">
       {announcement}
@@ -351,6 +359,7 @@ export default function App({ client = fixtureClient }: AppProps) {
                   opportunity={opportunity}
                   previewState={previewState}
                   announce={announce}
+                  onInvestorAccessFailure={investorAccess ? expireInvestorWorkspace : undefined}
                 />
               )}
             </Suspense>

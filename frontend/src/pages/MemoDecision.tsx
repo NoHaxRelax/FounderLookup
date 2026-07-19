@@ -14,13 +14,13 @@ import {
   Form,
   Input,
   Modal,
-  Radio,
   Result,
   Space,
   Tag,
   Typography,
 } from 'antd'
 import { useState, type FormEvent } from 'react'
+import { FounderLookupApiError } from '../api/httpClient'
 import type {
   DecisionDisposition,
   DecisionReceipt,
@@ -37,6 +37,7 @@ interface MemoDecisionProps {
   opportunity: OpportunityDetail
   previewState: ViewState
   announce: (message: string) => void
+  onInvestorAccessFailure?: () => void
 }
 
 const decisions: Array<{ value: DecisionDisposition; label: string; detail: string }> = [
@@ -54,7 +55,7 @@ const sentenceCase = (value: string) => {
   return normalized ? normalized.charAt(0).toLocaleUpperCase() + normalized.slice(1) : normalized
 }
 
-export function MemoDecision({ client, opportunity, previewState, announce }: MemoDecisionProps) {
+export function MemoDecision({ client, opportunity, previewState, announce, onInvestorAccessFailure }: MemoDecisionProps) {
   const suggestedRationale =
     opportunity.contradictions.find((item) => item.blocking)?.smallestNextAction ??
     opportunity.recommendation.nextActions[0] ??
@@ -65,9 +66,6 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
   const [saving, setSaving] = useState(false)
   const [decisionError, setDecisionError] = useState('')
   const [confirmationOpen, setConfirmationOpen] = useState(false)
-  // The fixture is the judge-facing demo: expose the safe human command immediately.
-  // HTTP remains progressively disclosed because it can mutate persisted state.
-  const [decisionFormOpen, setDecisionFormOpen] = useState(client.runtime === 'fixture')
 
   const canAdvance =
     opportunity.screeningCase.readiness === 'ready' ||
@@ -125,7 +123,16 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
       setReceipt(decision)
       setConfirmationOpen(false)
       announce(`Human Decision ${disposition.replaceAll('_', ' ')} recorded. No funds moved.`)
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof FounderLookupApiError &&
+        [401, 403].includes(error.problem.status) &&
+        onInvestorAccessFailure
+      ) {
+        setConfirmationOpen(false)
+        onInvestorAccessFailure()
+        return
+      }
       setDecisionError(DECISION_FAILURE_MESSAGE)
       announce(DECISION_FAILURE_MESSAGE)
     } finally {
@@ -198,64 +205,45 @@ export function MemoDecision({ client, opportunity, previewState, announce }: Me
             />
           ) : (
             <div className="decision-entry">
-              {client.runtime !== 'fixture' && (
-                <div className="decision-entry__prompt">
-                  <div>
-                    <strong>Ready for an explicit human command</strong>
-                    <p>Choose a disposition and record the evidence-backed rationale only when you are ready.</p>
+              <Form id="human-decision-form" className="human-decision-form" layout="vertical" onSubmitCapture={openConfirmation}>
+                <fieldset className="decision-disposition-field">
+                  <legend className="decision-field-label"><span aria-hidden="true">*</span> Choose a disposition</legend>
+                  <div className="decision-options">
+                    {availableDecisions.map((decision) => (
+                      <label key={decision.value}>
+                        <input
+                          type="radio"
+                          name="disposition"
+                          value={decision.value}
+                          checked={disposition === decision.value}
+                          onChange={() => setDisposition(decision.value)}
+                        />
+                        <span className="decision-option__copy"><strong>{decision.label}</strong><small>{decision.detail}</small></span>
+                      </label>
+                    ))}
                   </div>
-                  <Button
-                    type="primary"
-                    aria-expanded={decisionFormOpen}
-                    aria-controls="human-decision-form"
-                    onClick={() => setDecisionFormOpen((open) => !open)}
-                  >
-                    {decisionFormOpen ? 'Close Decision form' : 'Start human Decision'}
-                  </Button>
-                </div>
-              )}
-
-              {decisionFormOpen && (
-                <Form id="human-decision-form" className="human-decision-form" layout="vertical" onSubmitCapture={openConfirmation}>
-                  <label className="decision-field-label" htmlFor="decision-disposition"><span aria-hidden="true">*</span> Choose a disposition</label>
-                  <Form.Item className="decision-disposition-field">
-                    <Radio.Group
-                      id="decision-disposition"
-                      className="decision-options"
-                      value={disposition}
-                      onChange={(event) => setDisposition(event.target.value as DecisionDisposition)}
-                    >
-                      <Space orientation="vertical">
-                        {availableDecisions.map((decision) => (
-                          <Radio key={decision.value} value={decision.value}>
-                            <span className="decision-option__copy"><strong>{decision.label}</strong><small>{decision.detail}</small></span>
-                          </Radio>
-                        ))}
-                      </Space>
-                    </Radio.Group>
-                  </Form.Item>
-                  {!canAdvance && !canOverrideInDemo && <p className="decision-policy-note">Advance is hidden until the evidence is decision-ready.</p>}
-                  {!canAdvance && canOverrideInDemo && <p className="decision-policy-note">Demo mode: advancing records explicit accepted risk; it does not send outreach or move funds.</p>}
-                  <label className="decision-field-label" htmlFor="decision-rationale"><span aria-hidden="true">*</span> Rationale</label>
-                  <Form.Item className="decision-rationale-field" extra="Required · preserved with the reviewed Assessment and memo identifiers.">
-                    <Input.TextArea
-                      id="decision-rationale"
-                      aria-label="Rationale"
-                      rows={3}
-                      required
-                      minLength={12}
-                      value={rationale}
-                      aria-invalid={Boolean(decisionError && !confirmationOpen)}
-                      onChange={(event) => {
-                        setRationale(event.target.value)
-                        setDecisionError('')
-                      }}
-                    />
-                  </Form.Item>
-                  {decisionError && !confirmationOpen && <Alert type="error" showIcon title="Decision not ready for review" description={decisionError} />}
-                  <Button type="primary" htmlType="submit">Review and confirm</Button>
-                </Form>
-              )}
+                </fieldset>
+                {!canAdvance && !canOverrideInDemo && <p className="decision-policy-note">Advance is hidden until the evidence is decision-ready.</p>}
+                {!canAdvance && canOverrideInDemo && <p className="decision-policy-note">Demo mode: advancing records explicit accepted risk; it does not send outreach or move funds.</p>}
+                <label className="decision-field-label" htmlFor="decision-rationale"><span aria-hidden="true">*</span> Rationale</label>
+                <Form.Item className="decision-rationale-field" extra="Required · preserved with the reviewed Assessment and memo identifiers.">
+                  <Input.TextArea
+                    id="decision-rationale"
+                    aria-label="Rationale"
+                    rows={3}
+                    required
+                    minLength={12}
+                    value={rationale}
+                    aria-invalid={Boolean(decisionError && !confirmationOpen)}
+                    onChange={(event) => {
+                      setRationale(event.target.value)
+                      setDecisionError('')
+                    }}
+                  />
+                </Form.Item>
+                {decisionError && !confirmationOpen && <Alert type="error" showIcon title="Decision not ready for review" description={decisionError} />}
+                <Button type="primary" htmlType="submit">Review and confirm</Button>
+              </Form>
             </div>
           )}
         </Card>

@@ -89,17 +89,52 @@ The production `Dockerfile` builds the browser bundle and serves it with Nginx. 
 choices are fixed to HTTP data, `/api/v1`, and session investor access. No credential is a Docker
 argument or image environment variable.
 
-Create a Railway service with `frontend/` as its root and the Dockerfile builder, then set:
+Create `backend` and `frontend` services in the same Railway project, using the matching directory
+as each service's root. Set an explicit `PORT=8000` on the backend so it can be referenced by the
+frontend service. Then set this reference variable on the frontend (replace `backend` if the
+service has a different name):
 
 ```dotenv
-BACKEND_URL=https://<backend-service-domain>
+BACKEND_URL=http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}
 ```
 
-Railway supplies `PORT`; the image defaults to `8080` outside Railway. `BACKEND_URL` must be an
-origin with no `/api` suffix because Nginx preserves the incoming `/api/v1/...` path. The service
-provides `GET /healthz`, SPA fallback routing, long-lived content-hashed asset caching, an 11 MiB upload ceiling,
+Use `http`, not `https`, for Railway's project-private network. A public backend URL also works,
+but is unnecessary for the browser because Nginx is the same-origin gateway. `BACKEND_URL` must
+be an origin with no `/api` suffix because Nginx preserves the incoming `/api/v1/...` path.
+
+The investor gateway has deliberately asymmetric configuration:
+
+| Service | Variable | Value |
+| --- | --- | --- |
+| backend | `FOUNDERLOOKUP_INVESTOR_API_KEY` | One strong, sealed secret |
+| frontend | `BACKEND_URL` | The private backend origin above |
+| frontend | investor secret | **Do not set one** |
+
+The investor types the same backend key into the gateway. It remains in that tab's
+`sessionStorage` and is sent as a bearer token through the same-origin proxy; no `VITE_` secret or
+frontend Railway secret is needed. The browser bundle already fixes `VITE_DATA_SOURCE=http`,
+`VITE_API_BASE_URL=/api/v1`, and `VITE_INVESTOR_AUTH_MODE=session` at build time.
+
+Generate a public domain only for the frontend service. Railway supplies its runtime `PORT`; the
+frontend image defaults to `8080` outside Railway. The service provides `GET /healthz`, SPA
+fallback routing, long-lived content-hashed asset caching, an 11 MiB upload ceiling,
 security headers, and same-origin `/api/` proxying. The browser-facing Railway domain must use
 HTTPS before an investor key is entered.
+
+For a seeded demo backend, the minimum Railway variables are:
+
+```dotenv
+PORT=8000
+FOUNDERLOOKUP_ENV=production
+FOUNDERLOOKUP_INVESTOR_API_KEY=<strong sealed secret>
+FOUNDERLOOKUP_FOUNDER_STATUS_PEPPER=<different strong sealed secret>
+FOUNDERLOOKUP_CORS_ORIGINS=https://<frontend-public-domain>
+FOUNDERLOOKUP_DEMO_SEED_ENABLED=true
+FOUNDERLOOKUP_DEMO_SEED_PRODUCTION_ACKNOWLEDGED=true
+```
+
+Attach a backend volume at `/app/data`. Provider keys and enable flags are optional; without them,
+the seeded UI remains deterministic and no external provider is called.
 
 Local image smoke test:
 

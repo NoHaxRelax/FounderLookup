@@ -1899,6 +1899,12 @@
     box-shadow: var(--shadow-raised);
   }
 
+  .recommendation-card,
+  .blocker-summary,
+  .human-decision-card {
+    border: 1px solid rgba(79, 93, 117, 0.18);
+  }
+
   .decision-card-heading {
     display: flex;
     min-inline-size: 0;
@@ -1935,27 +1941,6 @@
     line-height: 1.35;
   }
 
-  .decision-entry__prompt {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.8rem 1.25rem;
-    padding: 0.9rem;
-    border-radius: 1.2rem;
-    background: rgba(226, 234, 247, 0.72);
-  }
-
-  .decision-entry__prompt > div {
-    min-inline-size: min(100%, 20rem);
-    flex: 1 1 24rem;
-  }
-
-  .decision-entry__prompt p {
-    margin: 0.25rem 0 0;
-    color: var(--ink-650);
-  }
-
   .human-decision-form {
     margin-block-start: 0.75rem;
     padding: 0;
@@ -1963,9 +1948,15 @@
     box-shadow: none;
   }
 
-  .decision-disposition-field,
+  fieldset.decision-disposition-field,
   .decision-rationale-field {
     margin-block-end: 0.85rem;
+  }
+
+  fieldset.decision-disposition-field {
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
   }
 
   .decision-field-label {
@@ -1979,15 +1970,11 @@
     color: #8a2945;
   }
 
-  .decision-options,
-  .decision-options > * {
-    inline-size: 100%;
-  }
-
-  .decision-options > * {
+  .decision-options {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.65rem;
+    inline-size: 100%;
   }
 
   .decision-options label {
@@ -1998,7 +1985,7 @@
     align-items: flex-start;
     min-block-size: 4.5rem;
     padding: 0.75rem 0.85rem;
-    border: 0;
+    border: 1px solid rgba(79, 93, 117, 0.16);
     border-radius: 1.2rem;
     background: var(--surface-raised);
     box-shadow: var(--shadow-raised);
@@ -2007,7 +1994,21 @@
   .decision-options label:has(input:checked) {
     color: var(--jade-800);
     background: var(--surface-inset);
+    border-color: var(--jade-700);
     box-shadow: var(--shadow-pressed);
+  }
+
+  .decision-options input[type='radio'] {
+    flex: 0 0 auto;
+    inline-size: 1.15rem;
+    block-size: 1.15rem;
+    margin: 0.15rem 0 0;
+    accent-color: var(--jade-700);
+  }
+
+  .decision-options label:has(input:focus-visible) {
+    outline: 3px solid var(--jade-700);
+    outline-offset: 3px;
   }
 
   .decision-option__copy {
@@ -2311,7 +2312,7 @@
     }
 
     .axes-grid,
-    .decision-options > * {
+    .decision-options {
       grid-template-columns: minmax(0, 1fr);
     }
   }
@@ -2379,9 +2380,6 @@
       justify-self: stretch;
     }
 
-    .decision-entry__prompt > button {
-      inline-size: 100%;
-    }
   }
 }
 
@@ -2465,7 +2463,6 @@
     .selected-deck,
     .optional-intake-details,
     .founder-editor,
-    .decision-entry__prompt,
     .human-decision-form,
     .secondary-controls > div,
     .progressive-stack > div,

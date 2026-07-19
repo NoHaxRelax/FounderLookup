@@ -83,6 +83,11 @@ optional and do not enable calls by themselves. If fictional seeded data is inte
 that production demo, both demo-seed flags are required. The documented process-local projection
 and background-worker limitations still apply after deployment.
 
+Set `PORT=8000` explicitly when the frontend uses Railway's recommended private-network reference
+`BACKEND_URL=http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}`. Enter the exact value
+of `FOUNDERLOOKUP_INVESTOR_API_KEY` in the browser's investor gateway; never copy it into a
+frontend variable or a `VITE_` build variable.
+
 `FOUNDERLOOKUP_ENV` accepts `development`, `test`, or `production`. Fictional demo seeding is
 off by default; production requires both the seed flag and its separate production-demo
 acknowledgement. `FOUNDERLOOKUP_LOG_LEVEL` accepts the standard `DEBUG`, `INFO`,
