@@ -12,8 +12,8 @@ The scoring engine is real and green: **330+ tests, every scoring rule adversari
 - **Identity resolution.** Collapses one founder from many scattered footprints; ambiguous merges go to a human, never a guess.
 - **The judge.** Claim-trust and founder-score rubrics, the three independent axes, and the builder-vs-fundability read that surfaces the exceptional builder a traditional screen filters out.
 - **Confidence, computed not asserted.** Self-consistency dispersion, snap-vs-reasoned divergence, explicit abstention when evidence is thin, a counterfactual identity-swap bias check, and per-subgroup calibration.
-- **Decision.** A conviction threshold and a candidate-keyed preliminary Assessment Envelope, plus an evaluation harness for calibration and predictive validity.
-- **Inbound reasoning.** Five framework-neutral analysis interfaces (market, idea novelty, founder dossier, adversarial validation, memo synthesis), backed live by **GPT-5.6 Luna via LangGraph**, behind the same neutral seam the deterministic fakes use.
+- **Decision.** A conviction threshold and a candidate-keyed preliminary Assessment Envelope, plus an evaluation harness that scores rank agreement, confidence-band coverage, calibration, and lift over a baseline, on fixtures.
+- **Inbound reasoning.** Five framework-neutral analysis interfaces (market, idea novelty, founder dossier, adversarial validation, memo synthesis), wired to **GPT-5.6 Luna via LangGraph** behind the same neutral seam the deterministic fakes use; a live smoke run is the final step.
 
 ## The flow
 
@@ -29,13 +29,15 @@ flowchart TD
     MEMO --> HUMAN{{"Human decision: 100K yes / no"}}
 ```
 
+> The designed pipeline. See **What's built** for today's scope: the outbound path runs end to end on fakes; inbound intake and canonical Memory persistence are aimed.
+
 ## Principles we don't compromise on
 
 - **The model extracts, the rubrics score.** The language model turns messy evidence into structured signals; deterministic, versioned rubrics do all the scoring. So the intelligence is auditable and reproducible, never a black box.
 - **Three axes, never averaged.** Founder / Market / Idea-vs-Market stay independent, each with a trend.
 - **Trust is per-claim.** Every assertion traces to evidence with a confidence level; contradictions surface before the investor sees them.
 - **Confidence is honest.** The system reports how sure it is and abstains instead of guessing; missing history lowers coverage and confidence, never founder quality.
-- **Founder Score persists.** A per-person, evidence-backed, versioned score that follows a founder across companies; one input to the Founder axis, never a replacement.
+- **Founder Score is built to persist.** A per-person, evidence-backed, versioned score designed to follow a founder across companies (persistence via canonical Memory is aimed); one input to the Founder axis, never a replacement.
 - **OSINT, done responsibly.** Many public sources, one cross-source-corroborated profile; public-only, terms-respecting, no deanonymization; a human reviews before any outreach.
 - **Recommendation, not autonomous capital.** The system decides what to recommend; a human deploys the check.
 
@@ -52,7 +54,7 @@ backend/src/founderlookup/
   infrastructure/  # persistence, files, telemetry
 ```
 
-Stack: Python + FastAPI + `uv` + SQLite. Inbound reasoning uses **LangGraph + GPT-5.6 Luna** behind framework-neutral interfaces, with deterministic fakes as the default and the demo fallback, so the pipeline is reproducible and the model provider is swappable. Mistral OCR handles deck extraction. Sourcing anchors free source-specific APIs behind a provider-neutral seam built for later expansion. See `docs/adr/` for the recorded model and orchestration decisions.
+Stack: Python + FastAPI + `uv` + SQLite. Inbound reasoning is wired to **LangGraph + GPT-5.6 Luna** behind framework-neutral interfaces, with deterministic fakes as the default and the demo fallback (a live smoke run is the final step), so the pipeline is reproducible and the model provider is swappable. Mistral OCR is the selected tool for deck extraction; that intake path is aimed. Sourcing anchors free source-specific APIs behind a provider-neutral seam built for later expansion. See `docs/adr/` for the recorded model and orchestration decisions.
 
 ## Getting started
 
