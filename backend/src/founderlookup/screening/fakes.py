@@ -52,9 +52,7 @@ class _FakeStructuredAnalysisAdapter[AnalysisResultT: StructuredAnalysis]:
                 f"{request.request_id!r}"
             )
         unsupported_claim_ids = {
-            claim.claim_id
-            for claim in request.claims
-            if claim.status is ClaimStatus.UNSUPPORTED
+            claim.claim_id for claim in request.claims if claim.status is ClaimStatus.UNSUPPORTED
         }
         cited_claim_ids = {
             claim_id
@@ -86,8 +84,7 @@ class _FakeStructuredAnalysisAdapter[AnalysisResultT: StructuredAnalysis]:
         evidence_by_id = {item.evidence_id: item for item in request.evidence}
         for finding in result.findings:
             if any(
-                evidence_by_id[evidence_id].claim_id
-                not in finding.supporting_claim_ids
+                evidence_by_id[evidence_id].claim_id not in finding.supporting_claim_ids
                 for evidence_id in finding.supporting_evidence_ids
             ) or any(
                 evidence_by_id[evidence_id].claim_id not in finding.counter_claim_ids
@@ -116,35 +113,27 @@ class FakeMarketAnalysisAdapter(_FakeStructuredAnalysisAdapter[MarketAnalysis]):
         return self._replay(request)
 
 
-class FakeIdeaNoveltyQualityAdapter(
-    _FakeStructuredAnalysisAdapter[IdeaNoveltyQualityAnalysis]
-):
+class FakeIdeaNoveltyQualityAdapter(_FakeStructuredAnalysisAdapter[IdeaNoveltyQualityAnalysis]):
     """Replay separate idea novelty and quality findings."""
 
     async def analyze(self, request: AnalysisRequest) -> IdeaNoveltyQualityAnalysis:
         return self._replay(request)
 
 
-class FakeFounderDossierAdapter(
-    _FakeStructuredAnalysisAdapter[FounderDossierAnalysis]
-):
+class FakeFounderDossierAdapter(_FakeStructuredAnalysisAdapter[FounderDossierAnalysis]):
     """Replay founder dossiers with only the presentation dimensions in policy."""
 
     async def analyze(self, request: AnalysisRequest) -> FounderDossierAnalysis:
         return self._replay(request)
 
 
-class FakeAdversarialValidationAdapter(
-    _FakeStructuredAnalysisAdapter[AdversarialValidation]
-):
+class FakeAdversarialValidationAdapter(_FakeStructuredAnalysisAdapter[AdversarialValidation]):
     """Replay a deterministic adversarial view for contract evaluation."""
 
     async def validate(self, request: AnalysisRequest) -> AdversarialValidation:
         result = self._replay(request)
         expected_unsupported = {
-            claim.claim_id
-            for claim in request.claims
-            if claim.status is ClaimStatus.UNSUPPORTED
+            claim.claim_id for claim in request.claims if claim.status is ClaimStatus.UNSUPPORTED
         }
         if set(result.unsupported_claim_ids) != expected_unsupported:
             raise InvalidFakeAnalysisError(
@@ -196,26 +185,18 @@ class FakeMemoSynthesisAdapter:
             or result.subject != request.subject
         ):
             raise InvalidFakeAnalysisError(
-                f"fixed memo {result.request_id!r} does not match request "
-                f"{request.request_id!r}"
+                f"fixed memo {result.request_id!r} does not match request {request.request_id!r}"
             )
         claim_by_id = {claim.claim_id: claim for claim in request.claims}
         cited_claim_ids = {
-            claim_id
-            for citation in result.section_citations
-            for claim_id in citation.claim_ids
+            claim_id for citation in result.section_citations for claim_id in citation.claim_ids
         }
         if not cited_claim_ids.issubset(claim_by_id):
-            raise InvalidFakeAnalysisError(
-                "memo cites a Claim not present in the request snapshot"
-            )
+            raise InvalidFakeAnalysisError("memo cites a Claim not present in the request snapshot")
         if any(
-            claim_by_id[claim_id].status is ClaimStatus.UNSUPPORTED
-            for claim_id in cited_claim_ids
+            claim_by_id[claim_id].status is ClaimStatus.UNSUPPORTED for claim_id in cited_claim_ids
         ):
-            raise InvalidFakeAnalysisError(
-                "memo cannot present an unsupported Claim as factual"
-            )
+            raise InvalidFakeAnalysisError("memo cannot present an unsupported Claim as factual")
         available_evidence_ids = {item.evidence_id for item in request.evidence}
         cited_evidence_ids = {
             evidence_id
@@ -232,9 +213,7 @@ class FakeMemoSynthesisAdapter:
             for citation in result.section_citations
             for evidence_id in citation.evidence_ids
         ):
-            raise InvalidFakeAnalysisError(
-                "memo Evidence does not belong to its cited Claim"
-            )
+            raise InvalidFakeAnalysisError("memo Evidence does not belong to its cited Claim")
         return result
 
 

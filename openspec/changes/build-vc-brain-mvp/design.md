@@ -417,7 +417,7 @@ This MVP remains one OpenSpec change because both developers are implementing on
               ▼                         ▼
        SWE/platform lane          Data/ML lane
        persistence/files          sourcing corpus
-       FastAPI + fake runs        provider bake-off
+       FastAPI + fake runs        selected adapters
        deterministic executor     score/trust rubrics
        founder/investor UX        planners/analyses/evals
               │                         │
@@ -442,16 +442,16 @@ This MVP remains one OpenSpec change because both developers are implementing on
 
 **SWE primary ownership:** project scaffold, SQLite/artifact implementation, HTTP/security/run semantics, deterministic query execution, fake-backed integration, founder/investor UX, and deployment documentation.
 
-**Data/ML primary ownership:** sourcing hypotheses and labeled corpus, Tavily-versus-Exa benchmark, source/entity extraction experiments, deterministic factor rubrics, query planning, logical analysis interfaces/adapters, prompt/model evaluation, and contradiction/Trust evaluation.
+**Data/ML primary ownership:** sourcing hypotheses and labeled corpus, selected-provider/source adapter evaluation, source/entity extraction experiments, deterministic factor rubrics, query planning, logical analysis interfaces/adapters, prompt/model evaluation, and contradiction/Trust evaluation.
 
 **Synchronization protocol:**
 
 1. The SWE lands the scaffold first; both developers immediately pair on the smallest v0 contract PR.
-2. After the planning artifacts, scaffold, v0 contracts, fixtures, and contract tests are committed to `main` through the team's normal user-approved Git workflow, create `work/swe-platform` from that exact shared commit. For the initial two-developer sprint, `main` is both the Data/ML lane and shared integration branch; strict file ownership and paired review protect shared contracts. A separate Data/ML feature branch may replace this temporary arrangement in a later workflow change.
+2. The initial SWE/inbound lane has been rebased into the shared worktree. New short-lived branches start from the same reviewed integration revision; strict file ownership and paired review continue to protect shared contracts.
 3. Each PR cites OpenSpec requirement/scenario names and task IDs, includes interface-level tests, and stays small enough to merge at least daily.
 4. Shared-contract behavior changes update this OpenSpec change first, receive both reviewers' approval, increment the schema/policy version, and land before dependent lane changes.
 5. SWE develops API/UX against deterministic fakes; Data/ML makes live adapters satisfy the same contract suite. Neither lane imports the other's implementation internals.
-6. Rebase `work/swe-platform` after each shared-contract change on `main` and run the combined contract suite before merging SWE work back to `main`.
+6. Rebase any remaining short-lived lane branch after each shared-contract change and run the combined contract suite before integration.
 7. The SWE owner is the initial integrator. A checked task means the behavior is present and verified in the current change worktree; merge-to-`main` status is recorded separately and never inferred from a checkbox. Lane commits reference task and scenario IDs and one integrator owns checkbox reconciliation.
 
 **Joint integration checkpoints:**
@@ -523,6 +523,7 @@ The resolved gates retain these implementation boundaries:
 - **Founder-presentation analysis encodes bias** → Limit it to claim clarity and Evidence consistency; prohibit appearance, polish, protected traits, and proxies.
 - **Neumorphism harms accessibility or density** → Keep normal styling borderless but selective; require labels, tonal/shape affordances, high-contrast focus outlines, semantic HTML, non-color states, real-browser reflow checks, and system-color boundaries in forced-colors mode.
 - **Private decks or provider credentials leak** → Validate uploads, protect file routes, classify data before external transfer, keep secrets server-side, and redact telemetry.
+- **Fictional demo records are mistaken for live Evidence** → Keep seeding off by default, require a second production-only acknowledgement, preserve explicit fictional provenance, and make no provider/OCR/outreach/Decision call during bootstrap.
 - **A recommendation is mistaken for autonomous investment** → Keep Recommendation and human Decision distinct in domain, API, and UX; exclude fund transfer entirely.
 - **SQLite or a single process limits scale** → Acceptable for a hackathon MVP; keep domain interfaces and immutable records portable while avoiding premature distributed infrastructure.
 - **Parallel branches drift at shared schemas** → Pair-review and version shared contracts first, merge small PRs daily, and require both lanes to run the same contract fixtures.
@@ -533,7 +534,7 @@ This is a greenfield change, so migration means staged construction rather than 
 
 1. Scaffold the backend and verify an empty FastAPI service through `uv`.
 2. Review and commit the OpenSpec artifacts, schema shapes/version identifiers, deterministic fixtures, and shared contract tests through the team's normal user-approved Git workflow.
-3. Create `work/swe-platform` from the shared `main` commit; the SWE works there while the Data/ML owner uses the strictly owned paths on `main`, and both lanes build against deterministic fakes before meeting again at I1.
+3. Reconcile the initial lane work into one shared integration revision; subsequent parallel work uses short-lived branches or agents with explicit file ownership and deterministic contract tests.
 4. Preserve the provider-neutral benchmark record, then implement the human-selected Tavily adapter with the recorded budgets and public-source policy; keep Exa out of the P0 runtime.
 5. In parallel, add local persistence/deck intake/API/UX and sourcing corpus/thesis rules/query planning/Assessment fakes; integrate Mistral OCR through the provider-neutral extractor using fictional inputs until private-deck controls are explicitly enabled.
 6. Integrate the selected provider and source-specific verification at checkpoint I2.

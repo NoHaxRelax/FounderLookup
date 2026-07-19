@@ -3,7 +3,6 @@ import {
   ArrowRightOutlined,
   ArrowUpOutlined,
   BookOutlined,
-  ClockCircleOutlined,
   FileSearchOutlined,
   IdcardOutlined,
   PlayCircleOutlined,
@@ -20,9 +19,6 @@ import {
   Descriptions,
   Progress,
   Space,
-  Statistic,
-  Tag,
-  Timeline,
   Typography,
 } from 'antd'
 import { useState } from 'react'
@@ -66,6 +62,11 @@ const trendIcon = (trend: AxisSummary['trend']) => {
   if (trend === 'declining') return <ArrowDownOutlined aria-hidden="true" />
   if (trend === 'unknown') return <QuestionCircleOutlined aria-hidden="true" />
   return <ArrowRightOutlined aria-hidden="true" />
+}
+
+const sentenceCase = (value: string) => {
+  const normalized = value.replaceAll('_', ' ').trim()
+  return normalized ? normalized.charAt(0).toLocaleUpperCase() + normalized.slice(1) : normalized
 }
 
 export function OpportunityDetail({
@@ -220,31 +221,25 @@ export function OpportunityDetail({
         )}
       </section>
 
-      <section aria-labelledby="run-history-title">
-        <h3 id="run-history-title">Run history</h3>
-        {record.timeline.length === 0 ? (
-          <p>No run stages were returned.</p>
-        ) : (
-          <Timeline
-            items={record.timeline.map((stage) => ({
-              color: stage.status === 'succeeded' ? 'green' : stage.status === 'failed' ? 'red' : 'orange',
-              content: (
-                <div className="timeline-stage">
-                  <div className="timeline-heading">
-                    <strong>{stage.label}</strong>
-                    <StatusBadge tone={stage.status === 'succeeded' ? 'positive' : stage.status === 'failed' ? 'critical' : 'warning'}>
-                      {stage.status}
-                    </StatusBadge>
-                  </div>
-                  <p>{stage.detail}</p>
-                  <Typography.Text type="secondary"><ClockCircleOutlined /> {stage.timing}</Typography.Text>
-                  {stage.externalWait && <Typography.Text type="secondary">External wait is separate from compute time.</Typography.Text>}
-                </div>
-              ),
-            }))}
-          />
-        )}
-      </section>
+      <Collapse
+        className="execution-audit"
+        items={[{
+          key: 'execution',
+          label: `Technical execution audit · ${record.timeline.length} stages`,
+          children: record.timeline.length === 0 ? <p>No execution stages were returned.</p> : (
+            <ol className="execution-audit__list">
+              {record.timeline.map((stage) => (
+                <li key={`${stage.label}-${stage.timing}`}>
+                  <span><strong>{stage.label}</strong><small>{stage.detail}</small></span>
+                  <StatusBadge tone={stage.status === 'succeeded' ? 'positive' : stage.status === 'failed' ? 'critical' : 'warning'}>
+                    {sentenceCase(stage.status)}
+                  </StatusBadge>
+                </li>
+              ))}
+            </ol>
+          ),
+        }]}
+      />
     </div>
   )
 
@@ -274,13 +269,14 @@ export function OpportunityDetail({
         <div className="decision-summary-grid">
           <Card className="recommendation-card">
             <StatusBadge tone={readinessBlocked ? 'warning' : 'positive'}>
-              Readiness {record.screeningCase.readiness.replaceAll('_', ' ')}
+              Readiness {sentenceCase(record.screeningCase.readiness)}
             </StatusBadge>
-            <h2 id="opportunity-act-title">{record.recommendation.action.replaceAll('_', ' ')}</h2>
+            <h2 id="opportunity-act-title">{sentenceCase(record.recommendation.action)}</h2>
             <p>{record.recommendation.summary}</p>
             <p className="muted">System Recommendation · awaiting an explicit human Decision.</p>
           </Card>
-          <Card className="blocker-summary" title={`Material blockers (${blockingContradictions.length})`}>
+          <Card className="blocker-summary">
+            <h2 className="decision-card-heading">Material blockers ({blockingContradictions.length})</h2>
             {blockingContradictions.length > 0 ? (
               <ul>
                 {blockingContradictions.map((contradiction) => <li key={contradiction.id}>{contradiction.summary}</li>)}
@@ -308,30 +304,71 @@ export function OpportunityDetail({
 
       <section className="assessment-overview" aria-labelledby="assessment-overview-title" aria-label="Founder score and three axes">
         <div className="section-heading">
-          <div><p className="eyebrow">Decision summary</p><h2 id="assessment-overview-title">Founder Score and three independent axes</h2></div>
-          <Typography.Text type="secondary">The axes are never averaged into the Founder Score.</Typography.Text>
+          <div>
+            <p className="eyebrow">Decision summary</p>
+            <h2 id="assessment-overview-title">Founder Score and three independent axes</h2>
+            <p className="assessment-overview__context">
+              Founder Score persists across Opportunities. Founder, Market, and Idea vs market are
+              current-Opportunity assessments. The three axes are never averaged into Founder Score.
+            </p>
+          </div>
         </div>
         <div className="score-and-axes">
-          <Card className="founder-score-card" title="Founder Score · persistent across Opportunities">
+          <Card
+            className="founder-score-card"
+            title={(
+              <div className="assessment-card-title">
+                <span>Persistent person-level signal</span>
+                <h3>Founder Score</h3>
+              </div>
+            )}
+          >
             {record.founderScore.state === 'known' ? (
               <>
-                <Statistic value={record.founderScore.value.score} suffix="/100" />
-                <StatusBadge tone="warning">
-                  {record.founderScore.value.provisional ? 'Provisional' : 'Established'} · {record.founderScore.value.uncertainty} uncertainty
-                </StatusBadge>
-                <p>{record.founderScore.value.coverageLabel}</p>
+                <div className="founder-score-card__value">
+                  <p className="founder-score-number">
+                    <strong>{record.founderScore.value.score}</strong><span>/100</span>
+                  </p>
+                  <StatusBadge tone={record.founderScore.value.provisional ? 'warning' : 'positive'}>
+                    {record.founderScore.value.provisional ? 'Provisional' : 'Established'}
+                  </StatusBadge>
+                </div>
+                <dl className="assessment-facts">
+                  <div><dt>Uncertainty</dt><dd>{record.founderScore.value.uncertainty}</dd></div>
+                  <div><dt>Coverage</dt><dd>{record.founderScore.value.coverageLabel}</dd></div>
+                </dl>
               </>
             ) : <KnowledgeState value={record.founderScore} />}
           </Card>
           <div className="axes-grid">
             {record.axes.map((axis) => (
-              <Card className="axis-card" key={axis.key} title={<h3>{axis.label}</h3>} extra={<StatusBadge tone={axisTone(axis)}>{axis.rating}</StatusBadge>}>
+              <Card
+                className="axis-card"
+                key={axis.key}
+                title={(
+                  <div className="assessment-card-title">
+                    <span>Current Opportunity</span>
+                    <h3>{axis.label}</h3>
+                  </div>
+                )}
+                extra={<StatusBadge tone={axisTone(axis)}>{axis.rating}</StatusBadge>}
+              >
                 <p className="trend-line">{trendIcon(axis.trend)} {axis.trendLabel}</p>
-                <p>{axis.coverageLabel}</p>
                 {axis.confidence.state === 'known' ? (
-                  <Progress percent={Math.round(axis.confidence.value * 100)} status="normal" aria-label={`${Math.round(axis.confidence.value * 100)}% confidence`} />
-                ) : <KnowledgeState value={axis.confidence} />}
-                <p className="muted">{axis.openQuestions.length} open question(s)</p>
+                  <div className="axis-confidence">
+                    <span>{Math.round(axis.confidence.value * 100)}% confidence</span>
+                    <Progress percent={Math.round(axis.confidence.value * 100)} showInfo={false} status="normal" aria-label={`${Math.round(axis.confidence.value * 100)}% confidence`} />
+                  </div>
+                ) : (
+                  <div className="axis-confidence axis-confidence--unknown">
+                    <StatusBadge tone="neutral">Confidence unknown</StatusBadge>
+                    <p>{axis.confidence.reason}</p>
+                  </div>
+                )}
+                <dl className="assessment-facts">
+                  <div><dt>Coverage</dt><dd>{axis.coverageLabel}</dd></div>
+                  <div><dt>Open questions</dt><dd>{axis.openQuestions.length}</dd></div>
+                </dl>
               </Card>
             ))}
           </div>
@@ -350,8 +387,12 @@ export function OpportunityDetail({
           items={[
             {
               key: 'understand',
-              label: <span><QuestionCircleOutlined aria-hidden="true" /> Understand the Recommendation</span>,
-              extra: <Tag>{record.recommendation.reasons.length} reasons · {record.diligenceActions.length} gaps</Tag>,
+              label: (
+                <span className="disclosure-label">
+                  <span><QuestionCircleOutlined aria-hidden="true" /> Understand the Recommendation</span>
+                  <small>{record.recommendation.reasons.length} reasons · {record.diligenceActions.length} gaps</small>
+                </span>
+              ),
               children: (
                 <div className="understand-grid">
                   <div><h3>Why</h3><ul>{record.recommendation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></div>
@@ -372,8 +413,12 @@ export function OpportunityDetail({
             },
             {
               key: 'audit',
-              label: <span><SafetyCertificateOutlined aria-hidden="true" /> Audit Claims, Evidence, Trust, and runs</span>,
-              extra: <Tag>{record.claims.length} claims · {record.evidence.length} evidence · {record.runIds.length} runs</Tag>,
+              label: (
+                <span className="disclosure-label">
+                  <span><SafetyCertificateOutlined aria-hidden="true" /> Audit Claims, Evidence, Trust, and runs</span>
+                  <small>{record.claims.length} claims · {record.evidence.length} evidence · {record.runIds.length} runs</small>
+                </span>
+              ),
               children: auditContent,
             },
           ]}

@@ -30,9 +30,7 @@ class AnalysisRequest(DomainModel):
     def require_unique_input_records(self) -> Self:
         claim_ids = tuple(claim.claim_id for claim in self.claims)
         evidence_ids = tuple(item.evidence_id for item in self.evidence)
-        if len(claim_ids) != len(set(claim_ids)) or len(evidence_ids) != len(
-            set(evidence_ids)
-        ):
+        if len(claim_ids) != len(set(claim_ids)) or len(evidence_ids) != len(set(evidence_ids)):
             raise ValueError("Claim and Evidence identifiers must be unique")
         if any(item.claim_id not in claim_ids for item in self.evidence):
             raise ValueError("Evidence must reference an input Claim")

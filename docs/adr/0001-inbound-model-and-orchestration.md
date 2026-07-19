@@ -1,53 +1,75 @@
-# ADR 0001: Inbound investment-intelligence model and orchestration
+# ADR 0001: GPT-5.6 Luna and bounded orchestration boundaries
 
-- Status: Accepted
+- Status: Accepted, revised after inbound/outbound integration
 - Date: 2026-07-19
-- Deciders: Elias, Rares (satisfies the human model gate, tasks 5.2 / 5.3)
+- Deciders: Elias, Rares, and the human reviewer (resolves OpenSpec tasks 5.2 / 5.3)
 
 ## Context
 
-The inbound reasoning lane needs a language model to produce the reasoned reads
-that the five analysis interfaces (market, idea novelty, founder dossier,
-adversarial validation, memo synthesis) consume, plus an orchestration layer to
-run them. Task 5.2 requires an explicit human decision on both before any provider
-is installed or configured.
+FounderLookup has two different model-shaped responsibilities:
 
-Note that our confidence estimator is deliberately logprob-free (it uses
-self-consistency dispersion and snap-versus-reasoned divergence, not token
-logprobs), so it does not require any specific provider. Anthropic Claude was
-therefore a viable option and is already available to the development agent. The
-team nonetheless chose OpenAI because an OpenAI API account with credit was on
-hand for the hackathon.
+1. inbound investment analysis through five framework-neutral specialist ports (market,
+   idea novelty, founder dossier, adversarial validation, and memo synthesis); and
+2. semantic extraction from already acquired public sourcing pages before deterministic
+   provenance projection.
+
+The rebased inbound lane provides the neutral ports, deterministic fakes, and an optional
+OpenAI reasoner wrapper. Outbound sourcing additionally needs a small convergence loop that
+can inspect explicit Evidence gaps and issue a bounded follow-up query. Canonical Memory must
+never become a model conversation or framework checkpoint store.
+
+The confidence estimator remains provider-neutral and logprob-free: it uses reasoned-sample
+dispersion and snap-versus-reasoned divergence. No provider or orchestration framework may
+change deterministic rubrics, create a human Decision, activate a candidate, or send outreach.
 
 ## Decision
 
-- Model: OpenAI, default `gpt-4o-mini`, as the inbound investment-intelligence
-  model. The key lives server-side in the gitignored `backend/.env` as
-  `OPENAI_API_KEY` and is never committed.
-- Orchestration: LangGraph, for the inbound reasoning loop only, behind the
-  framework-neutral analysis interfaces (task 3.7). Checkpoints are transient run
-  state, never canonical Memory.
-- Both sit behind the neutral interfaces, so the provider or orchestrator can be
-  swapped without touching the domain contracts or the rest of the pipeline.
-- Deterministic fakes remain the default for development, tests, and the demo
-  fallback. Live model calls happen only on demo/final runs, to conserve credit
-  and keep the pipeline reproducible.
+- Use OpenAI `gpt-5.6-luna` as the optional structured-analysis model. `OPENAI_API_KEY`
+  remains server-side and a key alone never enables a sourcing call.
+- Keep inbound specialist analyses behind their existing framework-neutral ports. The
+  OpenAI reasoner is an adapter to those ports, not a new domain contract. Deterministic
+  fakes remain the reproducible default and fallback. Full live inbound composition and
+  acceptance remain separate implementation tasks.
+- Use a separate direct-HTTP Responses API adapter for bounded PUBLIC sourcing extraction.
+  It sends `store=false`, a strict Pydantic-derived JSON Schema, and capped input/output;
+  deterministic code then validates every excerpt, line, URL, contact route, and Unknown
+  against the immutable acquired artifact. Non-public artifacts are rejected even if a
+  generic private-use flag is enabled.
+- Use LangGraph only as the thin outbound retrieval state machine:
+  `plan` → `retrieve_structure` → `assess_gaps` → conditional follow-up or `finalize`.
+  It records queries, Evidence deltas, budgets, failures, and a terminal stop reason.
+  Provider adapters, validators, scoring, and inbound analysis remain callable without it.
+- Treat graph state as disposable run control. Canonical Source Artifacts, Observations,
+  Claims, Evidence, assessments, and audit records remain in application-owned Memory.
+- Keep founder-private processing behind separate explicit demo gates. Mistral OCR requires
+  OCR enablement, private transfer, an explicit confirmed OCR purpose, and either normal
+  provider-control confirmations or the hackathon private-risk acknowledgement. Any future
+  founder-private OpenAI analysis requires both private enablement and its risk
+  acknowledgement. These acknowledgements do not claim training opt-out, Zero Data
+  Retention, or a processing region.
 
 ## Consequences
 
-- The live inbound path depends on an external paid API, so it is not
-  self-contained. The full pipeline still runs end to end on deterministic fakes
-  with no model call, which is the self-contained, reproducible demo path.
-- Development iterates on the free fakes; credit is spent only on the handful of
-  live demo runs. If credit is exhausted, the demo falls back to fakes and still
-  runs, so the provider is not a single point of failure.
-- Cost is kept low by defaulting to `gpt-4o-mini`, small self-consistency sample
-  counts, and bounded `max_tokens`.
+- The outbound graph can be replaced without changing provider or domain contracts, and a
+  model failure preserves already accepted artifacts before deterministic fallback.
+- Public contact routes are evidence records, not enrichment guesses. Each retains a stable
+  id, route kind, exact value, validated optional link, public classification, source
+  artifact/name/locator, and collection time; participant identity remains unverified.
+- Live model/provider behavior is an opt-in acceptance step. A skipped live test is not
+  evidence that cost, latency, refusal behavior, or scientific calibration has passed.
+- Deterministic tests and demo fixtures remain network-free. If provider credit or access is
+  unavailable, the system can still demonstrate the bounded workflow without pretending the
+  run was live.
+- LangGraph has no authority to activate candidates, contact people, record investment
+  Decisions, or move funds.
 
 ## Alternatives considered
 
-- Anthropic Claude: viable and already available to the dev agent, no token
-  logprobs (not needed for our confidence method). Not chosen only because the
-  OpenAI credit was already in hand.
-- No live model (fakes only): kept as the default and the demo fallback, but on
-  its own it does not exercise the model-backed reasoning we want to show.
+- `gpt-4o-mini`: the original draft default; superseded by the explicit GPT-5.6 Luna
+  selection and therefore no longer the documented runtime default.
+- LangGraph for inbound and outbound analysis internals: rejected. Only outbound retrieval
+  needs the bounded conditional state machine; specialist analysis and scoring stay neutral.
+- Plain Python for the outbound convergence loop: viable, but superseded by the human choice
+  of a thin LangGraph boundary with replayable stop-state auditing.
+- No live model: retained as the deterministic fallback, but it does not satisfy the
+  separately tracked real-provider acceptance checks.

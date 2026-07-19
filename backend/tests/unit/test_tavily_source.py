@@ -102,7 +102,7 @@ def test_search_maps_only_public_allowed_urls_and_keeps_snippet_as_metadata() ->
         payload = json.loads(request.content)
         assert request.url == "https://api.tavily.com/search"
         assert request.headers["authorization"] == f"Bearer {KEY}"
-        assert payload["search_depth"] == "basic"
+        assert payload["search_depth"] == "advanced"
         assert payload["max_results"] == 10
         assert payload["include_raw_content"] is False
         assert payload["include_domains"] == ["example.com"]
@@ -206,7 +206,7 @@ def test_extract_captures_original_url_content_and_hash() -> None:
         payload = json.loads(request.content)
         assert payload == {
             "urls": ["https://example.com/founder"],
-            "extract_depth": "basic",
+            "extract_depth": "advanced",
             "format": "markdown",
             "include_images": False,
         }

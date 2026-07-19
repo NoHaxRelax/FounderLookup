@@ -573,10 +573,15 @@ async def test_runtime_persists_private_intake_and_runs_injected_extraction(
     projection_records = application.state.sqlite_memory.list_records(
         RecordCategory.DECK_EVIDENCE_PROJECTION
     )
+    metadata_projection_records = application.state.sqlite_memory.list_records(
+        RecordCategory.APPLICATION_METADATA_PROJECTION
+    )
     assert len(projection_records) == 1
+    assert len(metadata_projection_records) == 1
     assert run_response.json()["accepted_output_ids"] == [
         response.json()["source_artifact_id"],
         "pdf-extraction:runtime-fake",
+        metadata_projection_records[0].record_id,
         projection_records[0].record_id,
     ]
     assert len(extractor.requests) == 1

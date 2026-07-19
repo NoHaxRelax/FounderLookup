@@ -293,9 +293,7 @@ def resolve_identities(signals: Sequence[IdentitySignal]) -> tuple[ResolvedEntit
         if len(roots) < 2:
             continue
         categories = {
-            signals[index].source_category
-            for root in roots
-            for index in strong_clusters[root]
+            signals[index].source_category for root in roots for index in strong_clusters[root]
         }
         if len(categories) < 2:
             continue

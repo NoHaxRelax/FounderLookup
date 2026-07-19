@@ -190,9 +190,7 @@ def test_acquire_not_found_is_failure() -> None:
         now=_now,
     )
 
-    result = asyncio.run(
-        adapter.acquire(_acquisition_request("https://openalex.org/A404"))
-    )
+    result = asyncio.run(adapter.acquire(_acquisition_request("https://openalex.org/A404")))
 
     assert result.status is AcquisitionStatus.FAILED
     assert result.failure is not None
@@ -202,9 +200,7 @@ def test_acquire_not_found_is_failure() -> None:
 def test_acquire_rejects_non_openalex_url() -> None:
     adapter = OpenAlexResearchSource(RecordedHttpTransport({}), now=_now)
 
-    result = asyncio.run(
-        adapter.acquire(_acquisition_request("https://github.com/octocat"))
-    )
+    result = asyncio.run(adapter.acquire(_acquisition_request("https://github.com/octocat")))
 
     assert result.status is AcquisitionStatus.FAILED
     assert result.failure is not None

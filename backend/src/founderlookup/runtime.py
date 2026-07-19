@@ -19,6 +19,7 @@ from fastapi import FastAPI
 
 from founderlookup.api.app import create_app
 from founderlookup.api.settings import APISettings
+from founderlookup.application.live_screening import LiveScreeningCoordinator
 from founderlookup.application.screening_bridge import DeterministicScreeningBridge
 from founderlookup.application.service import (
     ApplicationExtractionOutcome,
@@ -26,7 +27,9 @@ from founderlookup.application.service import (
     FakeVCBrainService,
 )
 from founderlookup.application.sourcing import (
+    BoundedPublicPdfAcquisition,
     MultiAdapterSourcingCoordinator,
+    PublicPdfAcquisitionPolicy,
     SourceAdapterBinding,
     SourcingCoordinatorPort,
     UnavailableSourcingCoordinator,
@@ -34,9 +37,11 @@ from founderlookup.application.sourcing import (
 from founderlookup.demo.bootstrap import DemoBootstrapResult, seed_local_demo
 from founderlookup.domain.common import KnowledgeValue
 from founderlookup.domain.evidence import SourceArtifactKind, SourceCategory
+from founderlookup.infrastructure.application_metadata import SQLiteApplicationMetadataStore
 from founderlookup.infrastructure.artifacts import PrivateArtifactStore
 from founderlookup.infrastructure.deck_evidence import SQLiteDeckEvidenceStore
 from founderlookup.infrastructure.intake_repository import SQLiteIntakeRepository
+from founderlookup.infrastructure.live_screening import SQLiteLiveScreeningStore
 from founderlookup.infrastructure.persistence import SQLiteMemory, new_opaque_id
 from founderlookup.infrastructure.rule_overrides import SQLiteRuleOverrideLedger
 from founderlookup.ingestion.extraction import (
@@ -67,6 +72,9 @@ from founderlookup.ingestion.sources.openalex import OpenAlexResearchSource
 from founderlookup.ingestion.sources.patentsview import PatentsViewPatentSource
 from founderlookup.ingestion.sources.semanticscholar import SemanticScholarResearchSource
 from founderlookup.ingestion.tavily import TavilyPolicy, TavilySource
+from founderlookup.screening.inbound_graph import InboundGraphLimits
+from founderlookup.screening.inbound_runtime import RuntimeInboundIntelligence
+from founderlookup.screening.openai_client import OpenAIReasoner
 from founderlookup.screening.query_executor import DeterministicQueryExecutor
 from founderlookup.screening.query_planner import DeterministicQueryPlanner
 
@@ -224,6 +232,7 @@ def create_runtime_app(
     settings: APISettings | None = None,
     extractor: PdfExtractor | None = None,
     tavily_client: httpx.AsyncClient | None = None,
+    public_pdf_client: httpx.AsyncClient | None = None,
     openai_client: httpx.AsyncClient | None = None,
     public_source_transport: HttpTransport | None = None,
     clock: Callable[[], datetime] = _utc_now,
@@ -237,16 +246,19 @@ def create_runtime_app(
     intake_repository = SQLiteIntakeRepository(data_dir / "intake.sqlite3", clock=clock)
     memory = SQLiteMemory(data_dir / "memory.sqlite3")
     deck_evidence_store = SQLiteDeckEvidenceStore(memory)
+    application_metadata_store = SQLiteApplicationMetadataStore(memory)
+    live_screening_store = SQLiteLiveScreeningStore(memory)
     artifact_store = PrivateArtifactStore(
         data_dir / "artifacts",
         authorize_read=lambda principal_id, _artifact_id: (
             principal_id in {_INVESTOR_PRINCIPAL, _EXTRACTION_PRINCIPAL}
         ),
     )
+    resolved_pdf_extractor = extractor or _configured_extractor(configured)
     intake = ApplicationIntakeService(
         repository=intake_repository,
         artifact_store=artifact_store,
-        extractor=extractor or _configured_extractor(configured),
+        extractor=resolved_pdf_extractor,
         clock=clock,
         id_factory=_opaque_id,
         max_pdf_bytes=configured.maximum_deck_bytes,
@@ -269,6 +281,33 @@ def create_runtime_app(
     if configured.demo_seed_enabled:
         demo_bootstrap = seed_local_demo(service, screening_bridge=screening_bridge)
 
+    live_screening_coordinator: LiveScreeningCoordinator | None = None
+    if configured.openai_inbound_enabled:
+        assert configured.openai_api_key is not None
+        reasoner = OpenAIReasoner.from_api_key(
+            configured.openai_api_key.get_secret_value(),
+            model=configured.openai_model,
+            effort=configured.openai_inbound_effort,
+            max_output_tokens=configured.openai_max_output_tokens,
+            timeout_seconds=configured.openai_timeout_seconds,
+            http_client=openai_client,
+        )
+        intelligence = RuntimeInboundIntelligence(
+            reasoner,
+            clock=clock,
+            max_input_bytes=configured.openai_max_input_bytes,
+            limits=InboundGraphLimits(
+                max_model_calls=configured.openai_inbound_max_model_calls,
+                stage_timeout_seconds=configured.openai_inbound_stage_timeout_seconds,
+                total_timeout_seconds=configured.openai_inbound_total_timeout_seconds,
+            ),
+        )
+        live_screening_coordinator = LiveScreeningCoordinator(
+            service=service,
+            intelligence=intelligence,
+            on_accepted=live_screening_store.persist,
+        )
+
     adapters: list[SourceAdapterBinding] = []
     sourcing_coordinator: SourcingCoordinatorPort
     if configured.tavily_enabled:
@@ -282,6 +321,8 @@ def create_runtime_app(
                 max_content_bytes=configured.tavily_max_content_bytes,
                 max_response_bytes=configured.tavily_max_response_bytes,
                 timeout_seconds=configured.tavily_timeout_seconds,
+                search_depth=configured.tavily_search_depth,
+                extract_depth=configured.tavily_extract_depth,
                 allowed_domains=configured.tavily_allowed_domain_list,
                 excluded_domains=configured.tavily_excluded_domain_list,
             ),
@@ -311,9 +352,7 @@ def create_runtime_app(
         )
     )
     source_transport = (
-        public_source_transport or UrllibHttpTransport()
-        if source_specific_enabled
-        else None
+        public_source_transport or UrllibHttpTransport() if source_specific_enabled else None
     )
     if configured.github_enabled:
         assert source_transport is not None
@@ -401,6 +440,23 @@ def create_runtime_app(
 
     if adapters:
         structured_extractor = None
+        public_pdf_acquisition = None
+        if configured.public_pdf_allowed_domain_list:
+            public_pdf_acquisition = BoundedPublicPdfAcquisition(
+                policy=PublicPdfAcquisitionPolicy(
+                    allowed_domains=configured.public_pdf_allowed_domain_list,
+                    excluded_domains=configured.public_pdf_excluded_domain_list,
+                    max_bytes=min(
+                        configured.public_pdf_max_bytes,
+                        configured.mistral_ocr_max_input_bytes,
+                        10 * 1024 * 1024,
+                    ),
+                    timeout_seconds=configured.public_pdf_timeout_seconds,
+                    max_redirects=configured.public_pdf_max_redirects,
+                ),
+                now=clock,
+                client=public_pdf_client,
+            )
         if configured.openai_structured_enabled:
             assert configured.openai_api_key is not None
             structured_extractor = OpenAIStructuredPageExtractor(
@@ -429,6 +485,11 @@ def create_runtime_app(
             timeout_seconds=configured.sourcing_timeout_seconds,
             cache_ttl_seconds=configured.sourcing_cache_ttl_seconds,
             structured_page_extractor=structured_extractor,
+            public_pdf_acquisition=public_pdf_acquisition,
+            public_pdf_extractor=(
+                resolved_pdf_extractor if public_pdf_acquisition is not None else None
+            ),
+            public_pdf_max_bytes=configured.public_pdf_max_bytes,
             max_follow_up_rounds=configured.sourcing_max_follow_up_rounds,
             max_discovery_calls=configured.sourcing_max_discovery_calls,
         )
@@ -464,6 +525,16 @@ def create_runtime_app(
 
     async def extract_once(application_id: str) -> None:
         try:
+            intake_record = intake_repository.get_application(application_id)
+            if intake_record is None:
+                raise RuntimeError("accepted Application intake record is unavailable")
+            metadata_projection = service.application_metadata_projection(application_id)
+            if metadata_projection is not None:
+                application_metadata_store.persist(metadata_projection)
+        except Exception:
+            record_safe_failure(application_id, None)
+            return
+        try:
             extraction = await intake.extract_deck(application_id)
         except (IntakeServiceError, PdfExtractionBlockedError) as error:
             # Intake persists the provider-neutral attempt before publishing run state.
@@ -473,9 +544,6 @@ def create_runtime_app(
             record_safe_failure(application_id, None)
             return
         try:
-            intake_record = intake_repository.get_application(application_id)
-            if intake_record is None:
-                raise RuntimeError("accepted Application intake record is unavailable")
             projection = service.project_application_deck(
                 application_id,
                 extraction=extraction,
@@ -490,7 +558,14 @@ def create_runtime_app(
                 application_id,
                 outcome=ApplicationExtractionOutcome.SUCCEEDED,
                 accepted_output_id=extraction.extraction_id,
-                additional_output_ids=(projection.projection_id,),
+                additional_output_ids=(
+                    *(
+                        (metadata_projection.projection_id,)
+                        if metadata_projection is not None
+                        else ()
+                    ),
+                    projection.projection_id,
+                ),
             )
         except Exception:
             with suppress(ApplicationServiceError, ValueError):
@@ -510,20 +585,29 @@ def create_runtime_app(
         application_extraction=extraction_coordinator,
         sourcing_coordinator=sourcing_coordinator,
         query_planner=query_planner,
+        live_screening_coordinator=live_screening_coordinator,
     )
     # Deliberately internal handles for process diagnostics and deterministic integration tests.
     application.state.intake_repository = intake_repository
     application.state.private_artifact_store = artifact_store
     application.state.sqlite_memory = memory
     application.state.deck_evidence_store = deck_evidence_store
+    application.state.application_metadata_store = application_metadata_store
+    application.state.live_screening_store = live_screening_store
     application.state.application_extraction_coordinator = extraction_coordinator
     application.state.deterministic_screening_bridge = screening_bridge
     application.state.demo_bootstrap = demo_bootstrap
-    application.state.enabled_sourcing_adapters = tuple(
-        binding.adapter_id for binding in adapters
+    application.state.enabled_sourcing_adapters = tuple(binding.adapter_id for binding in adapters)
+    application.state.openai_structured_enabled = configured.openai_structured_enabled and bool(
+        adapters
     )
-    application.state.openai_structured_enabled = (
-        configured.openai_structured_enabled and bool(adapters)
+    application.state.openai_inbound_enabled = live_screening_coordinator is not None
+    application.state.live_screening_coordinator = live_screening_coordinator
+    application.state.public_pdf_acquisition_enabled = bool(
+        adapters and configured.public_pdf_allowed_domain_list
+    )
+    application.state.public_pdf_ocr_enabled = bool(
+        adapters and configured.public_pdf_allowed_domain_list and configured.mistral_ocr_enabled
     )
     application.state.deterministic_query_planner = query_planner
     return application

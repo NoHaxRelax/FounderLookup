@@ -1,12 +1,18 @@
 """Focused tests for safe minimum Application and follow-up intake."""
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from hashlib import sha256
 
 import pytest
 
-from founderlookup.application.ports import ApplicationIntakePort, IntakeSubmission
+from founderlookup.application.ports import (
+    ApplicationFounderProfile,
+    ApplicationIntakePort,
+    ApplicationSubmittedMetadata,
+    IntakeSubmission,
+)
 from founderlookup.domain.common import (
     EntityKind,
     KnowledgeState,
@@ -222,6 +228,7 @@ def _submission(
     content: bytes = PDF_BYTES,
     key: str = "request-001",
     canonical_company_id: str | None = None,
+    metadata: ApplicationSubmittedMetadata | None = None,
 ) -> IntakeSubmission:
     return IntakeSubmission(
         company_name=company_name,
@@ -230,6 +237,7 @@ def _submission(
         deck_content=content,
         idempotency_key=key,
         canonical_company_id=canonical_company_id,
+        metadata=metadata or ApplicationSubmittedMetadata(),
     )
 
 
@@ -312,6 +320,59 @@ def test_minimum_application_stores_original_before_page_extraction() -> None:
     assert extraction_request.classification is DataClassification.FOUNDER_PRIVATE
     assert store.read_calls == [(accepted.source_artifact_id, "system:pdf-extraction")]
     assert repository.applications[accepted.application_id].extraction.value == extracted
+
+
+def test_optional_metadata_is_fingerprinted_persisted_and_backward_defaulted() -> None:
+    repository = _Repository()
+    store = _ArtifactStore()
+    service = _service(repository, store, FakePdfExtractor({}))
+    metadata = ApplicationSubmittedMetadata(
+        website="https://acme.example",
+        one_line_pitch="A fictional private intake assertion.",
+        location="Zurich",
+        stage="pre-seed",
+        founders=(
+            ApplicationFounderProfile(
+                full_name="Avery Example",
+                github_url="https://github.com/avery-example",
+            ),
+        ),
+    )
+
+    accepted = asyncio.run(service.submit(_submission(metadata=metadata)))
+    record = repository.applications[accepted.application_id]
+
+    assert accepted.metadata == metadata
+    assert record.submitted_metadata == metadata
+    assert record.optional_values.company_website.value == "https://acme.example"
+    assert record.optional_values.founders.value == metadata.founders
+    assert asyncio.run(service.submit(_submission(metadata=metadata))).replayed is True
+    with pytest.raises(IdempotencyConflictError):
+        asyncio.run(
+            service.submit(
+                _submission(
+                    metadata=metadata.model_copy(update={"stage": "seed"}),
+                )
+            )
+        )
+
+    # SQLite stores revision JSON, not schema-shaped columns. A pre-extension JSON record
+    # therefore loads with safe defaults after the code upgrade and needs no destructive DDL.
+    legacy_payload = record.model_dump(mode="json")
+    legacy_payload.pop("submitted_metadata")
+    optional = legacy_payload["optional_values"]
+    assert isinstance(optional, dict)
+    for key in (
+        "company_website",
+        "one_line_pitch",
+        "location",
+        "contact_email",
+        "founders",
+    ):
+        optional.pop(key)
+    restored = ApplicationIntakeRecord.model_validate_json(json.dumps(legacy_payload))
+    assert restored.submitted_metadata == ApplicationSubmittedMetadata()
+    assert restored.optional_values.company_website.state is KnowledgeState.UNKNOWN
 
 
 @pytest.mark.parametrize(

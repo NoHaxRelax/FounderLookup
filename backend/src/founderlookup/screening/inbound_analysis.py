@@ -216,11 +216,17 @@ def _validate_claim_citations(
             )
     for claim in claims:
         _check_evidence_side(
-            claim, claim.supporting_evidence_ids, EvidenceStance.SUPPORTS, evidence_by_id,
+            claim,
+            claim.supporting_evidence_ids,
+            EvidenceStance.SUPPORTS,
+            evidence_by_id,
             "supporting",
         )
         _check_evidence_side(
-            claim, claim.counter_evidence_ids, EvidenceStance.REFUTES, evidence_by_id,
+            claim,
+            claim.counter_evidence_ids,
+            EvidenceStance.REFUTES,
+            evidence_by_id,
             "counter",
         )
 
@@ -515,8 +521,7 @@ class MemoSynthesisResult:
         if orphans:
             joined = ", ".join(sorted(orphans))
             raise AnalysisResultError(
-                f"material claims are carried but cited by no section or recommendation: "
-                f"{joined}"
+                f"material claims are carried but cited by no section or recommendation: {joined}"
             )
 
 
@@ -538,9 +543,7 @@ class MarketAnalysisPort(Protocol):
 class IdeaNoveltyAnalysisPort(Protocol):
     """Produce idea novelty/quality claims and an idea-versus-market read."""
 
-    async def analyze_idea_novelty(
-        self, request: AnalysisRequest
-    ) -> IdeaNoveltyAnalysisResult:
+    async def analyze_idea_novelty(self, request: AnalysisRequest) -> IdeaNoveltyAnalysisResult:
         """Return a proposed idea novelty/quality analysis without mutating Memory."""
         ...
 
@@ -632,16 +635,12 @@ class FakeMarketAnalysisAdapter(_AnalysisReplayAdapter[MarketAnalysisResult]):
 class FakeIdeaNoveltyAnalysisAdapter(_AnalysisReplayAdapter[IdeaNoveltyAnalysisResult]):
     """Replay schema-valid idea novelty/quality analyses without a model or framework."""
 
-    async def analyze_idea_novelty(
-        self, request: AnalysisRequest
-    ) -> IdeaNoveltyAnalysisResult:
+    async def analyze_idea_novelty(self, request: AnalysisRequest) -> IdeaNoveltyAnalysisResult:
         """Return the fixed idea novelty analysis keyed by ``request.request_id``."""
         return self._resolve(request)
 
 
-class FakeFounderDossierAnalysisAdapter(
-    _AnalysisReplayAdapter[FounderDossierAnalysisResult]
-):
+class FakeFounderDossierAnalysisAdapter(_AnalysisReplayAdapter[FounderDossierAnalysisResult]):
     """Replay schema-valid founder dossier analyses without a model or framework."""
 
     async def analyze_founder_dossier(
@@ -651,9 +650,7 @@ class FakeFounderDossierAnalysisAdapter(
         return self._resolve(request)
 
 
-class FakeAdversarialValidationAdapter(
-    _AnalysisReplayAdapter[AdversarialValidationResult]
-):
+class FakeAdversarialValidationAdapter(_AnalysisReplayAdapter[AdversarialValidationResult]):
     """Replay schema-valid adversarial validations without a model or framework."""
 
     async def validate(self, request: AnalysisRequest) -> AdversarialValidationResult:

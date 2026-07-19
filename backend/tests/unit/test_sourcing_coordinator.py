@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from founderlookup.application.models import (
+    SourcingLoopAuditStatus,
     ThesisCriterion,
     ThesisCriterionMode,
     ThesisDraft,
@@ -46,6 +47,15 @@ from founderlookup.ingestion.hackathons import (
     HackathonShowcaseProjection,
     IdentityReviewState,
     PublicHackathonDeckRelationship,
+)
+from founderlookup.ingestion.openai_structured import (
+    OpenAIPublicPageExtraction,
+    OpenAIStructuredResult,
+    OpenAIStructuredUsage,
+    PublicPageStructuredExtractorPort,
+    PublicPageStructuredRequest,
+    StructuredExtractionStatus,
+    project_validated_openai_extraction,
 )
 from founderlookup.ingestion.policy import PublicSourcePolicyRecord
 
@@ -136,7 +146,7 @@ class _RecordedSource:
             )
             for index, (url, title) in enumerate(self._leads, start=1)
         )
-        failures = (() if self._discovery_failure is None else (self._discovery_failure,))
+        failures = () if self._discovery_failure is None else (self._discovery_failure,)
         return DiscoveryResult(
             result_id=f"{self.adapter_id}:result:{request.request_id}",
             request_id=request.request_id,
@@ -171,9 +181,7 @@ class _RecordedSource:
                 original_url=request.original_url,
                 status=AcquisitionStatus.FAILED,
                 completed_at=NOW,
-                source_event_time=KnowledgeValue[datetime].unknown(
-                    "the source acquisition failed"
-                ),
+                source_event_time=KnowledgeValue[datetime].unknown("the source acquisition failed"),
                 failure=failure,
             )
         body, media_type = self._content[request.original_url]
@@ -192,6 +200,101 @@ class _RecordedSource:
         )
 
 
+class _DeterministicStructuredExtractor:
+    """Project exact fixture lines without a provider call or invented contact data."""
+
+    def __init__(self) -> None:
+        self.requests: list[PublicPageStructuredRequest] = []
+        self.failure: Exception | None = None
+
+    async def extract(self, request: PublicPageStructuredRequest) -> OpenAIStructuredResult:
+        self.requests.append(request)
+        extraction = OpenAIPublicPageExtraction.model_validate_json(
+            json.dumps(
+                {
+                    "schema_version": "openai-public-page-extraction.v0",
+                    "event": {
+                        "state": "known",
+                        "value": "Alpine AI Hack 2026",
+                        "gap_reason": None,
+                        "evidence": {
+                            "line_number": 1,
+                            "excerpt": "Event: Alpine AI Hack 2026",
+                        },
+                    },
+                    "project": {
+                        "state": "known",
+                        "value": "Signal Forge",
+                        "gap_reason": None,
+                        "evidence": {"line_number": 2, "excerpt": "Project: Signal Forge"},
+                    },
+                    "participants": [],
+                    "participant_gap_reason": "No participant was published in the fixture.",
+                    "links": [],
+                    "public_deck_gap_reason": "No public deck was published in the fixture.",
+                    "public_contacts": [
+                        {
+                            "kind": "website",
+                            "label": "Official website",
+                            "value": "https://signal-forge.example/",
+                            "evidence": {
+                                "line_number": 3,
+                                "excerpt": (
+                                    "Website: [Official website](https://signal-forge.example/)"
+                                ),
+                            },
+                        },
+                        {
+                            "kind": "public_email",
+                            "label": "Contact",
+                            "value": "hello@signal-forge.example",
+                            "evidence": {
+                                "line_number": 4,
+                                "excerpt": "Contact: hello@signal-forge.example",
+                            },
+                        },
+                    ],
+                    "public_contact_gap_reason": None,
+                    "ambiguous_or_unsupported": [],
+                    "identity_verification": "not_performed",
+                }
+            )
+        )
+        try:
+            showcase, contacts = project_validated_openai_extraction(
+                source_artifact=request.source_artifact,
+                content=request.content,
+                extraction=extraction,
+                model_version="deterministic-structured-test.v0",
+            )
+        except Exception as error:
+            self.failure = error
+            raise
+        try:
+            return OpenAIStructuredResult(
+                result_id=f"structured-result:{request.request_id}",
+                request_id=request.request_id,
+                status=StructuredExtractionStatus.SUCCEEDED,
+                completed_at=NOW,
+                requested_model="deterministic-structured-test.v0",
+                model_version=KnowledgeValue[str].known("deterministic-structured-test.v0"),
+                provider_response_id=KnowledgeValue[str].unknown(
+                    "The deterministic extractor has no provider response"
+                ),
+                projection=showcase,
+                contact_projection=contacts,
+                usage=OpenAIStructuredUsage(
+                    input_tokens=0,
+                    output_tokens=0,
+                    total_tokens=0,
+                ),
+                failure=None,
+            )
+        except Exception as error:
+            self.failure = error
+            raise
+
+
 def _runtime(
     tmp_path: Path,
     bindings: tuple[SourceAdapterBinding, ...],
@@ -199,6 +302,7 @@ def _runtime(
     max_pages: int = 5,
     max_follow_up_rounds: int = 0,
     max_discovery_calls: int = 12,
+    structured_page_extractor: PublicPageStructuredExtractorPort | None = None,
 ) -> tuple[MultiAdapterSourcingCoordinator, FakeVCBrainService, SQLiteMemory]:
     service_ids = count(1)
     coordinator_ids = count(1)
@@ -230,6 +334,7 @@ def _runtime(
         cache_ttl_seconds=900,
         max_follow_up_rounds=max_follow_up_rounds,
         max_discovery_calls=max_discovery_calls,
+        structured_page_extractor=structured_page_extractor,
     )
     return coordinator, service, memory
 
@@ -341,8 +446,7 @@ async def test_authoritative_duplicate_wins_and_projects_claim_evidence(tmp_path
     assert len(memory.list_records(RecordCategory.EVIDENCE)) >= 3
     claims = memory.list_records(RecordCategory.CLAIM)
     assert any(
-        record.payload["predicate"] == "developer_activity.github_handle"
-        for record in claims
+        record.payload["predicate"] == "developer_activity.github_handle" for record in claims
     )
     assert all(record.payload["status"] == "asserted_unverified" for record in claims)
     policy_records = [
@@ -519,6 +623,87 @@ async def test_agentic_loop_follows_one_gap_then_stops_on_no_new_evidence(
     assert audit.rounds[0].new_evidence_count > 0
     assert audit.rounds[1].new_evidence_count == 0
     assert audit.outreach_action == "none"
+    candidate_audit = service.list_candidates().items[0].sourcing_audit
+    assert candidate_audit is not None
+    assert candidate_audit.status is SourcingLoopAuditStatus.STOPPED
+    assert candidate_audit.rounds_completed == 2
+    assert candidate_audit.round_limit == 3
+    assert candidate_audit.stop_reason == "no_new_evidence"
+    assert candidate_audit.run_id == accepted.run.run_id
+    run_audit = service.get_run_view(accepted.run.run_id).sourcing_audit
+    assert run_audit == candidate_audit
+
+
+@pytest.mark.anyio
+async def test_validated_public_contacts_reach_candidate_read_model_with_provenance(
+    tmp_path: Path,
+) -> None:
+    showcase_url = "https://showcase.example/projects/signal-forge"
+    content = b"""Event: Alpine AI Hack 2026
+Project: Signal Forge
+Website: [Official website](https://signal-forge.example/)
+Contact: hello@signal-forge.example
+"""
+    source = _RecordedSource(
+        "structured-showcase-source-v0",
+        SourceCategory.HACKATHON,
+        ((showcase_url, "Signal Forge public showcase"),),
+        {showcase_url: (content, "text/markdown; charset=utf-8")},
+    )
+    extractor = _DeterministicStructuredExtractor()
+    coordinator, service, _memory = _runtime(
+        tmp_path,
+        (
+            _binding(
+                source,
+                categories=(SourceCategory.HACKATHON,),
+                authoritative=True,
+                kind=SourceArtifactKind.WEB_SNAPSHOT,
+                media_types=("text/markdown",),
+            ),
+        ),
+        max_pages=1,
+        structured_page_extractor=extractor,
+    )
+    command = _command((SourceCategory.HACKATHON,), max_pages=1)
+
+    accepted = coordinator.enqueue(command)
+    await coordinator.execute(accepted.run.run_id, command)
+
+    assert len(extractor.requests) == 1
+    assert extractor.failure is None, repr(extractor.failure)
+    candidate = service.list_candidates().items[0]
+    assert candidate.company_name == "Showcase project: Signal Forge"
+    assert candidate.public_contact_routes, service.get_run(accepted.run.run_id).model_dump_json()
+    assert [route.model_dump(mode="json") for route in candidate.public_contact_routes] == [
+        {
+            "route_id": candidate.public_contact_routes[0].route_id,
+            "kind": "website",
+            "label": "Official website",
+            "value": "https://signal-forge.example/",
+            "href": "https://signal-forge.example/",
+            "classification": "public",
+            "source_artifact_id": extractor.requests[0].source_artifact.source_artifact_id,
+            "source_name": "Signal Forge public showcase",
+            "source_locator": "line:3",
+            "collected_at": "2026-07-19T14:00:00Z",
+        },
+        {
+            "route_id": candidate.public_contact_routes[1].route_id,
+            "kind": "public_email",
+            "label": "Contact",
+            "value": "hello@signal-forge.example",
+            "href": None,
+            "classification": "public",
+            "source_artifact_id": extractor.requests[0].source_artifact.source_artifact_id,
+            "source_name": "Signal Forge public showcase",
+            "source_locator": "line:4",
+            "collected_at": "2026-07-19T14:00:00Z",
+        },
+    ]
+    assert candidate.sourcing_audit is not None
+    assert candidate.sourcing_audit.run_id == accepted.run.run_id
+    assert candidate.sourcing_audit.stop_reason == "page_budget_exhausted"
 
 
 @pytest.mark.anyio
@@ -591,8 +776,7 @@ Pitch deck: [Public slides](https://showcase.example.test/decks/signal-forge.pdf
         "Bo Demo",
     ]
     assert all(
-        item.identity_state is IdentityReviewState.NEEDS_REVIEW
-        for item in projection.participants
+        item.identity_state is IdentityReviewState.NEEDS_REVIEW for item in projection.participants
     )
     relationship_payload = next(
         record.payload
@@ -615,6 +799,5 @@ Pitch deck: [Public slides](https://showcase.example.test/decks/signal-forge.pdf
     ]
     assert len(participant_claims) == 2
     assert all(
-        "identity remains unverified" in str(item["statement"])
-        for item in participant_claims
+        "identity remains unverified" in str(item["statement"]) for item in participant_claims
     )

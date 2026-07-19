@@ -6,18 +6,27 @@ import asyncio
 import ipaddress
 import json
 import re
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 from hashlib import sha256
 from typing import Annotated, Literal, Protocol, TypedDict, cast, runtime_checkable
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
+import httpx
 from langgraph.graph import END, START, StateGraph
 from pydantic import Field, StringConstraints, model_validator
 
-from founderlookup.application.models import OutboundCandidateView, RunAccepted
+from founderlookup.application.models import (
+    OutboundCandidateView,
+    PublicContactRouteKind,
+    PublicContactRouteView,
+    RunAccepted,
+    SourcingLoopAuditStatus,
+    SourcingLoopAuditView,
+)
 from founderlookup.application.screening_bridge import (
     DeterministicScreeningBridge,
     ScreeningSignalBundle,
@@ -52,6 +61,12 @@ from founderlookup.domain.runs import PipelineFailure, PipelineRun, PipelineStag
 from founderlookup.domain.scoring import CoverageLevel, CoverageSummary
 from founderlookup.infrastructure.artifacts import PrivateArtifactStore
 from founderlookup.infrastructure.persistence import NewRecord, RecordCategory, SQLiteMemory
+from founderlookup.ingestion.extraction import (
+    PdfExtractionError,
+    PdfExtractionRequest,
+    PdfExtractionResult,
+    PdfExtractor,
+)
 from founderlookup.ingestion.hackathons import (
     HACKATHON_PROJECTION_VERSION,
     HackathonLinkKind,
@@ -93,6 +108,13 @@ _STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _MAX_FAILURES = 64
 _PROHIBITED_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa")
 _OUTBOUND_LOOP_VERSION = "outbound-convergence-loop.v0"
+_PUBLIC_DECK_OCR_VERSION = "public-deck-ocr.v0"
+_GOOGLE_SLIDES_DECK = re.compile(
+    r"^/presentation/d/(?P<document_id>[A-Za-z0-9_-]{10,256})/"
+    r"(?:edit|view|present|export/pdf)/?$"
+)
+_PUBLIC_PDF_MAX_BYTES = 10 * 1024 * 1024
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 
 
 class BoundedSourcingCommand(DomainModel):
@@ -216,9 +238,7 @@ class OutboundSearchRoundAudit(DomainModel):
 
 class OutboundSearchLoopAudit(DomainModel):
     record_type: Literal["outbound_search_loop"] = "outbound_search_loop"
-    loop_version: Literal["outbound-convergence-loop.v0"] = (
-        "outbound-convergence-loop.v0"
-    )
+    loop_version: Literal["outbound-convergence-loop.v0"] = "outbound-convergence-loop.v0"
     record_id: Annotated[
         str,
         StringConstraints(strict=True, min_length=1, max_length=128),
@@ -233,6 +253,312 @@ class OutboundSearchLoopAudit(DomainModel):
     maximum_discovery_calls: Annotated[int, Field(strict=True, ge=1, le=32)]
     candidate_activation: Literal["human_controlled"] = "human_controlled"
     outreach_action: Literal["none"] = "none"
+
+
+class PublicDeckOcrRecord(DomainModel):
+    """Immutable public-deck OCR result or explicit safe Unknown fallback."""
+
+    record_type: Literal["public_deck_ocr"] = "public_deck_ocr"
+    projection_version: Literal["public-deck-ocr.v0"] = "public-deck-ocr.v0"
+    record_id: Annotated[
+        str,
+        StringConstraints(strict=True, min_length=1, max_length=128),
+    ]
+    record_version_id: Annotated[
+        str,
+        StringConstraints(strict=True, min_length=1, max_length=128),
+    ]
+    source_artifact_id: Annotated[
+        str,
+        StringConstraints(strict=True, min_length=1, max_length=128),
+    ]
+    state: Literal["known", "unknown"]
+    extraction: PdfExtractionResult | None
+    safe_code: (
+        Annotated[
+            str,
+            StringConstraints(strict=True, min_length=1, max_length=128),
+        ]
+        | None
+    )
+    attempted_at: UTCDateTime
+
+    @model_validator(mode="after")
+    def preserve_known_unknown_shape(self) -> PublicDeckOcrRecord:
+        if self.state == "known":
+            if self.extraction is None or self.safe_code is not None:
+                raise ValueError("known public-deck OCR requires only an extraction")
+        elif self.extraction is not None or self.safe_code is None:
+            raise ValueError("unknown public-deck OCR requires only a safe code")
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class PublicDeckPdfTarget:
+    """An explicit public deck URL and the HTTPS PDF URL safe to acquire."""
+
+    source_url: str
+    acquisition_url: str
+    normalization: Literal["direct_pdf", "google_slides_export_pdf"]
+
+
+@dataclass(frozen=True, slots=True)
+class PublicPdfAcquisitionPolicy:
+    """Server-owned ceilings and host allowlist for direct public PDF bytes."""
+
+    allowed_domains: tuple[str, ...]
+    excluded_domains: tuple[str, ...] = ()
+    max_bytes: int = _PUBLIC_PDF_MAX_BYTES
+    timeout_seconds: float = 20.0
+    max_redirects: int = 5
+
+    def __post_init__(self) -> None:
+        allowed = tuple(_normalize_policy_domain(item) for item in self.allowed_domains)
+        excluded = tuple(_normalize_policy_domain(item) for item in self.excluded_domains)
+        if not allowed:
+            raise ValueError("public PDF acquisition requires an explicit domain allowlist")
+        if set(allowed) & set(excluded):
+            raise ValueError("a public PDF domain cannot be both allowed and excluded")
+        if not 0 < self.max_bytes <= _PUBLIC_PDF_MAX_BYTES:
+            raise ValueError("public PDF byte ceiling must be between one byte and 10 MiB")
+        if not 0 < self.timeout_seconds <= 60:
+            raise ValueError("public PDF timeout must be between zero and 60 seconds")
+        if not 0 <= self.max_redirects <= 5:
+            raise ValueError("public PDF redirects must be between zero and five")
+        object.__setattr__(self, "allowed_domains", tuple(dict.fromkeys(allowed)))
+        object.__setattr__(self, "excluded_domains", tuple(dict.fromkeys(excluded)))
+
+
+class BoundedPublicPdfAcquisition:
+    """Acquire only allowlisted HTTPS PDF bytes, following at most five safe redirects."""
+
+    adapter_id = "bounded-public-pdf-v0"
+
+    def __init__(
+        self,
+        *,
+        policy: PublicPdfAcquisitionPolicy,
+        now: Callable[[], UTCDateTime],
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._policy = policy
+        self._now = now
+        self._client = client
+
+    @asynccontextmanager
+    async def _client_scope(self) -> AsyncIterator[httpx.AsyncClient]:
+        if self._client is not None:
+            yield self._client
+            return
+        async with httpx.AsyncClient(trust_env=False, follow_redirects=False) as client:
+            yield client
+
+    async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:
+        operation_id = f"{self.adapter_id}:acquire:{request.acquisition_request_id}"
+        if request.classification is not DataClassification.PUBLIC:
+            return self._failure(
+                request,
+                operation_id,
+                "classification_blocked",
+                "Public PDF acquisition accepts public content only",
+                retryable=False,
+            )
+        if "application/pdf" not in {
+            item.split(";", 1)[0].strip().casefold() for item in request.allowed_media_types
+        }:
+            return self._failure(
+                request,
+                operation_id,
+                "media_type_blocked",
+                "Public PDF acquisition requires an application/pdf policy",
+                retryable=False,
+            )
+        try:
+            target = resolve_public_deck_pdf_url(request.original_url)
+            current_url, host = _normalize_public_url(target.acquisition_url)
+        except ValueError:
+            return self._failure(
+                request,
+                operation_id,
+                "unsafe_public_pdf_url",
+                "The public PDF URL was rejected by source policy",
+                retryable=False,
+            )
+        if not self._domain_allowed(host):
+            return self._failure(
+                request,
+                operation_id,
+                "domain_policy_rejected",
+                "The public PDF URL is outside the explicit domain allowlist",
+                retryable=False,
+            )
+
+        maximum = min(request.max_bytes, self._policy.max_bytes)
+        timeout = min(float(request.timeout_seconds), self._policy.timeout_seconds)
+        try:
+            async with self._client_scope() as client:
+                for redirect_count in range(self._policy.max_redirects + 1):
+                    async with client.stream(
+                        "GET",
+                        current_url,
+                        headers={"accept": "application/pdf"},
+                        timeout=timeout,
+                        follow_redirects=False,
+                    ) as response:
+                        if response.status_code in _REDIRECT_STATUSES:
+                            location = response.headers.get("location")
+                            if location is None or redirect_count >= self._policy.max_redirects:
+                                return self._failure(
+                                    request,
+                                    operation_id,
+                                    "public_pdf_redirect_rejected",
+                                    "The public PDF redirect chain was rejected",
+                                    retryable=False,
+                                )
+                            redirected = urljoin(current_url, location)
+                            try:
+                                current_url, host = _normalize_public_url(redirected)
+                            except ValueError:
+                                return self._failure(
+                                    request,
+                                    operation_id,
+                                    "public_pdf_redirect_rejected",
+                                    "The public PDF redirect chain was rejected",
+                                    retryable=False,
+                                )
+                            if urlsplit(current_url).scheme != "https" or not self._domain_allowed(
+                                host
+                            ):
+                                return self._failure(
+                                    request,
+                                    operation_id,
+                                    "public_pdf_redirect_rejected",
+                                    "The public PDF redirect chain was rejected",
+                                    retryable=False,
+                                )
+                            continue
+                        if response.status_code != 200:
+                            return self._failure(
+                                request,
+                                operation_id,
+                                "public_pdf_unavailable",
+                                "The public PDF could not be acquired",
+                                retryable=response.status_code >= 500,
+                            )
+                        declared = response.headers.get("content-length")
+                        if declared is not None:
+                            try:
+                                if int(declared) > maximum:
+                                    return self._failure(
+                                        request,
+                                        operation_id,
+                                        "content_budget_exceeded",
+                                        "The public PDF exceeded the byte budget",
+                                        retryable=False,
+                                    )
+                            except ValueError:
+                                return self._failure(
+                                    request,
+                                    operation_id,
+                                    "invalid_public_pdf_response",
+                                    "The public PDF response metadata was invalid",
+                                    retryable=True,
+                                )
+                        media_type = (
+                            response.headers.get("content-type", "")
+                            .split(";", 1)[0]
+                            .strip()
+                            .casefold()
+                        )
+                        if media_type != "application/pdf":
+                            return self._failure(
+                                request,
+                                operation_id,
+                                "public_deck_not_pdf",
+                                "The linked public deck did not return application/pdf",
+                                retryable=False,
+                            )
+                        chunks: list[bytes] = []
+                        size = 0
+                        async for chunk in response.aiter_bytes():
+                            size += len(chunk)
+                            if size > maximum:
+                                return self._failure(
+                                    request,
+                                    operation_id,
+                                    "content_budget_exceeded",
+                                    "The public PDF exceeded the byte budget",
+                                    retryable=False,
+                                )
+                            chunks.append(chunk)
+                        content = b"".join(chunks)
+                        if not content.startswith(b"%PDF-"):
+                            return self._failure(
+                                request,
+                                operation_id,
+                                "public_deck_not_pdf",
+                                "The linked public deck did not return PDF bytes",
+                                retryable=False,
+                            )
+                        return AcquisitionResult(
+                            result_id=(
+                                f"{self.adapter_id}:acquisition:{request.acquisition_request_id}"
+                            ),
+                            acquisition_request_id=request.acquisition_request_id,
+                            original_url=request.original_url,
+                            status=AcquisitionStatus.ACQUIRED,
+                            completed_at=self._now(),
+                            content=content,
+                            media_type="application/pdf",
+                            content_sha256=sha256(content).hexdigest(),
+                            source_event_time=KnowledgeValue[datetime].unknown(
+                                "The public deck response established no source event time"
+                            ),
+                        )
+        except (httpx.HTTPError, TimeoutError):
+            return self._failure(
+                request,
+                operation_id,
+                "public_pdf_transport_failed",
+                "The public PDF transport failed safely",
+                retryable=True,
+            )
+        return self._failure(  # pragma: no cover - loop always returns
+            request,
+            operation_id,
+            "public_pdf_redirect_rejected",
+            "The public PDF redirect chain was rejected",
+            retryable=False,
+        )
+
+    def _domain_allowed(self, host: str) -> bool:
+        if any(_domain_matches(host, item) for item in self._policy.excluded_domains):
+            return False
+        return any(_domain_matches(host, item) for item in self._policy.allowed_domains)
+
+    def _failure(
+        self,
+        request: AcquisitionRequest,
+        operation_id: str,
+        safe_code: str,
+        safe_message: str,
+        *,
+        retryable: bool,
+    ) -> AcquisitionResult:
+        return AcquisitionResult(
+            result_id=f"{self.adapter_id}:acquisition:{request.acquisition_request_id}",
+            acquisition_request_id=request.acquisition_request_id,
+            original_url=request.original_url,
+            status=AcquisitionStatus.BLOCKED,
+            completed_at=self._now(),
+            source_event_time=KnowledgeValue[datetime].unknown("No public PDF bytes were accepted"),
+            failure=CollectionFailure(
+                operation_id=operation_id,
+                safe_code=safe_code,
+                safe_message=safe_message,
+                retryable=retryable,
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,6 +662,9 @@ class MultiAdapterSourcingCoordinator:
         timeout_seconds: float,
         cache_ttl_seconds: int = 900,
         structured_page_extractor: PublicPageStructuredExtractorPort | None = None,
+        public_pdf_acquisition: AcquisitionPort | None = None,
+        public_pdf_extractor: PdfExtractor | None = None,
+        public_pdf_max_bytes: int | None = None,
         max_follow_up_rounds: int = 0,
         max_discovery_calls: int = 12,
     ) -> None:
@@ -347,6 +676,10 @@ class MultiAdapterSourcingCoordinator:
             raise ValueError("sourcing coordinator result/page budgets exceed the MVP ceiling")
         if cache_ttl_seconds < 0:
             raise ValueError("sourcing cache TTL cannot be negative")
+        if public_pdf_max_bytes is not None and not (
+            0 < public_pdf_max_bytes <= _PUBLIC_PDF_MAX_BYTES
+        ):
+            raise ValueError("public PDF byte ceiling must be between one byte and 10 MiB")
         if not 0 <= max_follow_up_rounds <= 3:
             raise ValueError("sourcing follow-up rounds must be between zero and three")
         if not 1 <= max_discovery_calls <= 32:
@@ -369,6 +702,9 @@ class MultiAdapterSourcingCoordinator:
         self._timeout_seconds = timeout_seconds
         self._cache_ttl = timedelta(seconds=cache_ttl_seconds)
         self._structured_page_extractor = structured_page_extractor
+        self._public_pdf_acquisition = public_pdf_acquisition
+        self._public_pdf_extractor = public_pdf_extractor
+        self._public_pdf_max_bytes = public_pdf_max_bytes or max_bytes
         self._max_follow_up_rounds = max_follow_up_rounds
         self._max_discovery_calls = max_discovery_calls
 
@@ -457,6 +793,32 @@ class MultiAdapterSourcingCoordinator:
                     _STAGE_CANONICALIZE,
                     "candidate_assessment_failed",
                     "A source-backed candidate could not be assessed safely",
+                    retryable=True,
+                )
+
+        stop_reason = loop_state["stop_reason"]
+        if stop_reason is None:
+            raise RuntimeError("completed outbound loop is missing its stop reason")
+        loop_audit = SourcingLoopAuditView(
+            status=(
+                SourcingLoopAuditStatus.COMPLETED
+                if stop_reason is OutboundSearchStopReason.SUFFICIENT_EVIDENCE
+                else SourcingLoopAuditStatus.STOPPED
+            ),
+            rounds_completed=len(loop_state["rounds"]),
+            round_limit=self._max_follow_up_rounds + 1,
+            stop_reason=stop_reason.value,
+            run_id=run_id,
+        )
+        for candidate_id in dict.fromkeys(accepted_candidate_ids):
+            try:
+                self._service.publish_candidate_sourcing_audit(candidate_id, loop_audit)
+            except Exception:
+                self._add_failure(
+                    canonical_failures,
+                    _STAGE_CANONICALIZE,
+                    "sourcing_audit_projection_failed",
+                    "The bounded sourcing audit could not be projected safely",
                     retryable=True,
                 )
 
@@ -596,9 +958,7 @@ class MultiAdapterSourcingCoordinator:
             round_result = state["last_round"]
             if round_result is None:
                 raise RuntimeError("outbound loop cannot assess a missing retrieval round")
-            new_evidence_count = len(
-                state["evidence_keys"] - state["previous_evidence_keys"]
-            )
+            new_evidence_count = len(state["evidence_keys"] - state["previous_evidence_keys"])
             gaps = self._evidence_gaps(command, state["canonicalized"])
             page_budget = min(command.max_pages, self._max_pages)
             if round_result.partial_failure:
@@ -695,8 +1055,8 @@ class MultiAdapterSourcingCoordinator:
         accepted_candidate_ids: list[str],
         accepted_projection_ids: list[str],
     ) -> _RoundExecution:
-        failure_count = len(discovery_failures) + len(acquisition_failures) + len(
-            canonical_failures
+        failure_count = (
+            len(discovery_failures) + len(acquisition_failures) + len(canonical_failures)
         )
         discovery_calls = self._discovery_calls(
             queued,
@@ -714,10 +1074,7 @@ class MultiAdapterSourcingCoordinator:
         )
 
         rounds_remaining = self._max_follow_up_rounds - round_index + 1
-        if (
-            SourceCategory.HACKATHON in command.source_categories
-            and self._max_follow_up_rounds > 0
-        ):
+        if SourceCategory.HACKATHON in command.source_categories and self._max_follow_up_rounds > 0:
             round_page_cap = min(
                 remaining_pages,
                 max(1, (remaining_pages + rounds_remaining - 1) // rounds_remaining),
@@ -800,9 +1157,7 @@ class MultiAdapterSourcingCoordinator:
                     candidate=candidate,
                     showcase=showcase,
                     public_contacts=public_contacts,
-                    changed=(
-                        accepted.is_new_artifact or candidate.preliminary_assessment is None
-                    ),
+                    changed=(accepted.is_new_artifact or candidate.preliminary_assessment is None),
                 )
             )
 
@@ -817,11 +1172,50 @@ class MultiAdapterSourcingCoordinator:
                 "Explicit public deck links remain uncollected because the page budget was reached",
                 retryable=False,
             )
-        deck_calls = tuple(
-            self._deck_acquisition_call(item, command=command) for item in selected_decks
-        )
+        deck_work: list[
+            tuple[
+                _CanonicalizedLead,
+                PublicHackathonLink,
+                PublicDeckPdfTarget,
+                _AcquisitionCall,
+            ]
+        ] = []
+        for canonical, source_link in selected_decks:
+            try:
+                target = resolve_public_deck_pdf_url(source_link.url)
+                acquisition_link = source_link.model_copy(update={"url": target.acquisition_url})
+                call = self._deck_acquisition_call(
+                    (canonical, acquisition_link),
+                    command=command,
+                )
+            except ValueError:
+                self._add_failure(
+                    acquisition_failures,
+                    _STAGE_ACQUIRE,
+                    "unsupported_public_deck_url",
+                    "A linked deck was not an HTTPS PDF or supported public Slides URL",
+                    retryable=False,
+                )
+                continue
+            self._append_collection_telemetry(
+                run_id=run_id,
+                record_id=self._id("public-deck-url-resolution"),
+                recorded_at=self._now(),
+                payload={
+                    "adapter_id": "public-deck-url-policy-v0",
+                    "operation": "resolve_public_deck_pdf_url",
+                    "status": "accepted",
+                    "source_url": target.source_url,
+                    "acquisition_url": target.acquisition_url,
+                    "normalization": target.normalization,
+                },
+            )
+            deck_work.append((canonical, source_link, target, call))
+        deck_calls = tuple(item[3] for item in deck_work)
         deck_outcomes = await asyncio.gather(*(self._acquire(call) for call in deck_calls))
-        for (canonical, link), outcome in zip(selected_decks, deck_outcomes, strict=True):
+        for (canonical, source_link, target, _call), outcome in zip(
+            deck_work, deck_outcomes, strict=True
+        ):
             accepted = self._accept_acquisition_outcome(
                 run_id=run_id,
                 outcome=outcome,
@@ -840,9 +1234,11 @@ class MultiAdapterSourcingCoordinator:
                 assert canonical.showcase is not None
                 relationship = link_public_hackathon_deck(
                     projection=canonical.showcase,
-                    link=link,
+                    link=source_link,
                     deck_source_artifact=accepted.artifact,
                     candidate_id=candidate.outbound_candidate_id,
+                    acquisition_url=target.acquisition_url,
+                    url_normalization=target.normalization,
                 )
                 self._persist_hackathon_deck_relationship(relationship)
             except Exception:
@@ -854,6 +1250,13 @@ class MultiAdapterSourcingCoordinator:
                     retryable=True,
                 )
                 continue
+            accepted_projection_ids.extend(
+                await self._extract_public_deck(
+                    run_id=run_id,
+                    accepted=accepted,
+                    failures=canonical_failures,
+                )
+            )
             canonical.candidate = candidate
             canonical.changed = canonical.changed or accepted.is_new_artifact
             accepted_candidate_ids.append(candidate.outbound_candidate_id)
@@ -872,6 +1275,102 @@ class MultiAdapterSourcingCoordinator:
             evidence_keys=_round_evidence_keys(canonicalized, round_artifact_ids),
             partial_failure=current_failure_count > failure_count,
         )
+
+    async def _extract_public_deck(
+        self,
+        *,
+        run_id: str,
+        accepted: _AcceptedAcquisition,
+        failures: list[PipelineFailure],
+    ) -> tuple[str, ...]:
+        """Send only newly acquired, signature-checked public PDFs through OCR."""
+
+        if (
+            self._public_pdf_extractor is None
+            or accepted.content is None
+            or not accepted.is_new_artifact
+        ):
+            return ()
+        artifact = accepted.artifact
+        media_type = artifact.media_type.split(";", 1)[0].strip().casefold()
+        if media_type != "application/pdf" or not accepted.content.startswith(b"%PDF-"):
+            safe_code = "public_deck_not_pdf"
+            self._add_failure(
+                failures,
+                _STAGE_CANONICALIZE,
+                safe_code,
+                "The explicitly linked public deck was retained but was not sent to OCR",
+                retryable=False,
+            )
+            self._persist_public_deck_ocr(
+                artifact=artifact,
+                attempted_at=self._now(),
+                extraction=None,
+                safe_code=safe_code,
+            )
+            self._append_public_deck_ocr_telemetry(
+                run_id=run_id,
+                artifact=artifact,
+                status="unknown",
+                safe_code=safe_code,
+            )
+            return ()
+
+        attempted_at = self._now()
+        try:
+            extraction = await self._public_pdf_extractor.extract(
+                PdfExtractionRequest(
+                    source_artifact_id=artifact.source_artifact_id,
+                    input_sha256=artifact.content_sha256,
+                    content=accepted.content,
+                    classification=DataClassification.PUBLIC,
+                    requested_at=attempted_at,
+                )
+            )
+            if (
+                extraction.source_artifact_id != artifact.source_artifact_id
+                or extraction.input_sha256 != artifact.content_sha256
+            ):
+                raise PdfExtractionError
+        except Exception as error:
+            safe_code = (
+                error.code if isinstance(error, PdfExtractionError) else "public_deck_ocr_failed"
+            )
+            self._add_failure(
+                failures,
+                _STAGE_CANONICALIZE,
+                safe_code,
+                "Public deck OCR did not produce an accepted extraction",
+                retryable=True,
+            )
+            self._persist_public_deck_ocr(
+                artifact=artifact,
+                attempted_at=attempted_at,
+                extraction=None,
+                safe_code=safe_code,
+            )
+            self._append_public_deck_ocr_telemetry(
+                run_id=run_id,
+                artifact=artifact,
+                status="unknown",
+                safe_code=safe_code,
+            )
+            return ()
+
+        self._persist_public_deck_ocr(
+            artifact=artifact,
+            attempted_at=attempted_at,
+            extraction=extraction,
+            safe_code=None,
+        )
+        self._append_public_deck_ocr_telemetry(
+            run_id=run_id,
+            artifact=artifact,
+            status="known",
+            safe_code=None,
+            extraction=extraction,
+        )
+        return (extraction.extraction_id,)
 
     def _evidence_gaps(
         self,
@@ -990,9 +1489,7 @@ class MultiAdapterSourcingCoordinator:
         failures: list[PipelineFailure],
     ) -> tuple[_RoutedLead, ...]:
         routed: list[_RoutedLead] = []
-        adapter_order = {
-            binding.adapter_id: index for index, binding in enumerate(self._adapters)
-        }
+        adapter_order = {binding.adapter_id: index for index, binding in enumerate(self._adapters)}
         for outcome in outcomes:
             if outcome.raised or outcome.result is None:
                 self._add_failure(
@@ -1110,9 +1607,7 @@ class MultiAdapterSourcingCoordinator:
                 classification=DataClassification.PUBLIC,
                 allowed_media_types=routed.binding.allowed_media_types,
                 max_bytes=min(command.max_bytes, self._max_bytes),
-                timeout_seconds=int(
-                    min(float(command.timeout_seconds), self._timeout_seconds)
-                ),
+                timeout_seconds=int(min(float(command.timeout_seconds), self._timeout_seconds)),
             ),
             cached_artifact=self._cached_artifact(routed.normalized_url, requested_at),
             artifact_kind=artifact_kind,
@@ -1189,10 +1684,9 @@ class MultiAdapterSourcingCoordinator:
             recorded_at=result.completed_at,
             payload=self._acquisition_telemetry(result, call.routed.binding.adapter_id),
         )
-        if (
-            result.acquisition_request_id != call.request.acquisition_request_id
-            or _url_key(result.original_url) != _url_key(call.request.original_url)
-        ):
+        if result.acquisition_request_id != call.request.acquisition_request_id or _url_key(
+            result.original_url
+        ) != _url_key(call.request.original_url):
             self._add_failure(
                 failures,
                 _STAGE_ACQUIRE,
@@ -1296,8 +1790,7 @@ class MultiAdapterSourcingCoordinator:
         for record in self._memory.list_records(RecordCategory.CANONICAL_ENTITY):
             if (
                 record.payload.get("projection_version") == HACKATHON_PROJECTION_VERSION
-                and record.payload.get("source_artifact_id")
-                == accepted.artifact.source_artifact_id
+                and record.payload.get("source_artifact_id") == accepted.artifact.source_artifact_id
             ):
                 return HackathonShowcaseProjection.model_validate_json(
                     json.dumps(dict(record.payload))
@@ -1351,14 +1844,10 @@ class MultiAdapterSourcingCoordinator:
                         "source_artifact_id": accepted.artifact.source_artifact_id,
                         "requested_model": result.requested_model,
                         "model_version": result.model_version.model_dump(mode="json"),
-                        "provider_response_id": result.provider_response_id.model_dump(
-                            mode="json"
-                        ),
+                        "provider_response_id": result.provider_response_id.model_dump(mode="json"),
                         "usage": result.usage.model_dump(mode="json"),
                         "safe_code": (
-                            result.failure.safe_code
-                            if result.failure is not None
-                            else None
+                            result.failure.safe_code if result.failure is not None else None
                         ),
                     },
                 )
@@ -1374,8 +1863,7 @@ class MultiAdapterSourcingCoordinator:
                     assert result.projection is not None
                     assert result.contact_projection is not None
                     if (
-                        result.projection.source_artifact_id
-                        != accepted.artifact.source_artifact_id
+                        result.projection.source_artifact_id != accepted.artifact.source_artifact_id
                         or result.contact_projection.source_artifact_id
                         != accepted.artifact.source_artifact_id
                     ):
@@ -1441,6 +1929,24 @@ class MultiAdapterSourcingCoordinator:
                         accepted.artifact.retrieved_at,
                     )
                     output_ids.append(contact_evidence.projection_id)
+                self._service.publish_candidate_public_contacts(
+                    candidate.outbound_candidate_id,
+                    tuple(
+                        PublicContactRouteView(
+                            route_id=route.route_id,
+                            kind=PublicContactRouteKind(route.kind.value),
+                            label=route.label,
+                            value=route.value,
+                            href=route.href,
+                            classification="public",
+                            source_artifact_id=route.source_artifact_id,
+                            source_name=route.source_name,
+                            source_locator=route.source_locator,
+                            collected_at=route.collected_at,
+                        )
+                        for route in public_contacts.routes
+                    ),
+                )
             except Exception:
                 self._add_failure(
                     failures,
@@ -1504,7 +2010,19 @@ class MultiAdapterSourcingCoordinator:
             (candidate for candidate in self._adapters if candidate.is_generic),
             canonical.routed.binding,
         )
-        normalized_url, _host = _normalize_public_url(link.url)
+        if self._public_pdf_acquisition is not None:
+            binding = replace(
+                binding,
+                adapter_id="bounded-public-pdf-v0",
+                acquisition=self._public_pdf_acquisition,
+                source_categories=(SourceCategory.HACKATHON,),
+                authoritative=False,
+                artifact_kind=SourceArtifactKind.DOCUMENT,
+                allowed_media_types=("application/pdf",),
+            )
+        normalized_url, host = _normalize_public_url(link.url)
+        if not _command_domain_allows(host, command):
+            raise ValueError("public deck URL falls outside the command domain policy")
         lead_digest = sha256(
             f"{canonical.showcase.projection_id if canonical.showcase else ''}\0{link.url}".encode()
         ).hexdigest()[:24]
@@ -1524,11 +2042,17 @@ class MultiAdapterSourcingCoordinator:
             ),
         )
         routed = _RoutedLead(binding=binding, lead=lead, normalized_url=normalized_url)
-        return self._acquisition_call(
+        call = self._acquisition_call(
             routed,
             command=command,
             artifact_kind=SourceArtifactKind.DOCUMENT,
             display_name=f"Public pitch deck: {link.label}"[:200],
+        )
+        if self._public_pdf_acquisition is None:
+            return call
+        return replace(
+            call,
+            request=call.request.model_copy(update={"max_bytes": self._public_pdf_max_bytes}),
         )
 
     def _coverage(self, candidate: OutboundCandidateView) -> CoverageSummary:
@@ -1537,9 +2061,7 @@ class MultiAdapterSourcingCoordinator:
             record = self._memory.latest(RecordCategory.SOURCE_ARTIFACT, artifact_id)
             if record is not None:
                 artifact_records.append(record)
-        series_ids = {
-            str(record.payload["artifact_series_id"]) for record in artifact_records
-        }
+        series_ids = {str(record.payload["artifact_series_id"]) for record in artifact_records}
         categories = tuple(
             sorted({str(record.payload["source_category"]) for record in artifact_records})
         )
@@ -1639,9 +2161,7 @@ class MultiAdapterSourcingCoordinator:
             artifact_series_id=series_id,
             artifact_version_id=self._id("source-version"),
             version_number=(1 if previous is None else previous.version_number + 1),
-            previous_source_artifact_id=(
-                None if previous is None else previous.source_artifact_id
-            ),
+            previous_source_artifact_id=(None if previous is None else previous.source_artifact_id),
             kind=artifact_kind,
             source_category=lead.source_category,
             classification=DataClassification.PUBLIC,
@@ -1805,6 +2325,82 @@ class MultiAdapterSourcingCoordinator:
             )
         )
 
+    def _persist_public_deck_ocr(
+        self,
+        *,
+        artifact: SourceArtifact,
+        attempted_at: UTCDateTime,
+        extraction: PdfExtractionResult | None,
+        safe_code: str | None,
+    ) -> PublicDeckOcrRecord:
+        record_digest = sha256(
+            (
+                f"{artifact.source_artifact_id}\x1f{artifact.artifact_version_id}\x1f"
+                f"{_PUBLIC_DECK_OCR_VERSION}"
+            ).encode()
+        ).hexdigest()[:32]
+        state: Literal["known", "unknown"] = "known" if extraction is not None else "unknown"
+        version_digest = sha256(
+            (
+                f"{record_digest}\x1f{state}\x1f{safe_code or ''}\x1f"
+                f"{extraction.extraction_id if extraction is not None else ''}"
+            ).encode()
+        ).hexdigest()[:32]
+        record = PublicDeckOcrRecord(
+            record_id=f"public-deck-ocr:{record_digest}",
+            record_version_id=f"public-deck-ocr-version:{version_digest}",
+            source_artifact_id=artifact.source_artifact_id,
+            state=state,
+            extraction=extraction,
+            safe_code=safe_code,
+            attempted_at=attempted_at,
+        )
+        self._memory.append_many_idempotent(
+            (
+                NewRecord(
+                    category=RecordCategory.CANONICAL_ENTITY,
+                    record_id=record.record_id,
+                    version_id=record.record_version_id,
+                    subject_id=artifact.source_artifact_id,
+                    recorded_at=attempted_at,
+                    payload=record.model_dump(mode="json"),
+                ),
+            )
+        )
+        return record
+
+    def _append_public_deck_ocr_telemetry(
+        self,
+        *,
+        run_id: str,
+        artifact: SourceArtifact,
+        status: Literal["known", "unknown"],
+        safe_code: str | None,
+        extraction: PdfExtractionResult | None = None,
+    ) -> None:
+        self._append_collection_telemetry(
+            run_id=run_id,
+            record_id=self._id("public-deck-ocr-telemetry"),
+            recorded_at=self._now(),
+            payload={
+                "adapter_id": "public-deck-ocr-v0",
+                "operation": "extract_public_pdf",
+                "status": status,
+                "source_artifact_id": artifact.source_artifact_id,
+                "content_sha256": artifact.content_sha256,
+                "extraction_id": (extraction.extraction_id if extraction is not None else None),
+                "extractor_version": (
+                    extraction.extractor_version if extraction is not None else None
+                ),
+                "model_version": (
+                    extraction.model_version.model_dump(mode="json")
+                    if extraction is not None
+                    else None
+                ),
+                "safe_code": safe_code,
+            },
+        )
+
     def _add_collection_failure(
         self,
         failures: list[PipelineFailure],
@@ -1905,13 +2501,8 @@ class MultiAdapterSourcingCoordinator:
             "request_id": result.request_id,
             "status": result.status.value,
             "completed_at": result.completed_at.isoformat(),
-            "leads": [
-                item.model_dump(mode="json")
-                for item in result.leads[: self._max_results]
-            ],
-            "failures": [
-                item.model_dump(mode="json") for item in result.failures[:_MAX_FAILURES]
-            ],
+            "leads": [item.model_dump(mode="json") for item in result.leads[: self._max_results]],
+            "failures": [item.model_dump(mode="json") for item in result.failures[:_MAX_FAILURES]],
             "usage": result.usage.model_dump(mode="json"),
         }
 
@@ -1931,9 +2522,7 @@ class MultiAdapterSourcingCoordinator:
             "media_type": result.media_type,
             "content_sha256": result.content_sha256,
             "failure": (
-                result.failure.model_dump(mode="json")
-                if result.failure is not None
-                else None
+                result.failure.model_dump(mode="json") if result.failure is not None else None
             ),
         }
 
@@ -2036,8 +2625,7 @@ def _round_evidence_keys(
             keys.update(f"link:{link.kind.value}:{link.url}" for link in showcase.links)
         if item.public_contacts is not None:
             keys.update(
-                f"contact:{route.kind.value}:{route.value}"
-                for route in item.public_contacts.routes
+                f"contact:{route.kind.value}:{route.value}" for route in item.public_contacts.routes
             )
     return frozenset(keys)
 
@@ -2125,6 +2713,33 @@ def _normalize_public_url(value: str) -> tuple[str, str]:
         )
     )
     return normalized, host
+
+
+def resolve_public_deck_pdf_url(value: str) -> PublicDeckPdfTarget:
+    """Allow a direct HTTPS PDF or derive the canonical Google Slides PDF export URL."""
+
+    normalized, host = _normalize_public_url(value)
+    parsed = urlsplit(normalized)
+    if parsed.scheme != "https":
+        raise ValueError("public deck acquisition requires HTTPS")
+    if parsed.path.casefold().endswith(".pdf"):
+        return PublicDeckPdfTarget(
+            source_url=normalized,
+            acquisition_url=normalized,
+            normalization="direct_pdf",
+        )
+    if host != "docs.google.com":
+        raise ValueError("public deck URL is not a direct PDF or Google Slides presentation")
+    match = _GOOGLE_SLIDES_DECK.fullmatch(parsed.path)
+    if match is None:
+        raise ValueError("Google Slides URL does not identify a supported presentation")
+    document_id = match.group("document_id")
+    export_url = f"https://docs.google.com/presentation/d/{document_id}/export/pdf"
+    return PublicDeckPdfTarget(
+        source_url=normalized,
+        acquisition_url=export_url,
+        normalization="google_slides_export_pdf",
+    )
 
 
 def _url_key(value: str) -> str:

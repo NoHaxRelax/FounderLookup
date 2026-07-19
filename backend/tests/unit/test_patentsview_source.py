@@ -30,10 +30,7 @@ def _now() -> datetime:
 
 def _patents_query_url(criteria: dict[str, object]) -> str:
     encoded = json.dumps(criteria, separators=(",", ":"))
-    return (
-        "https://api.patentsview.org/patents/query"
-        f"?q={urllib.parse.quote(encoded, safe='')}"
-    )
+    return f"https://api.patentsview.org/patents/query?q={urllib.parse.quote(encoded, safe='')}"
 
 
 def _json_response(payload: Mapping[str, object], status: int = 200) -> HttpResponse:
@@ -125,6 +122,31 @@ def test_discover_no_results_is_empty_success() -> None:
     assert result.failures == ()
 
 
+def test_discover_rejects_a_successful_non_patent_payload() -> None:
+    """A retired endpoint redirect must not masquerade as an authoritative no-result."""
+
+    request = _discovery_request(query="redirected endpoint")
+    url = _patents_query_url({"_text_any": {"patent_title": "redirected endpoint"}})
+    adapter = PatentsViewPatentSource(
+        RecordedHttpTransport(
+            {
+                url: HttpResponse(
+                    status=200,
+                    headers={"content-type": "text/html"},
+                    body=b"<html><title>API transition</title></html>",
+                )
+            }
+        ),
+        now=_now,
+    )
+
+    result = asyncio.run(adapter.discover(request))
+
+    assert result.status is CollectionResultStatus.FAILED
+    assert result.leads == ()
+    assert result.failures[0].safe_code == "invalid_provider_payload"
+
+
 def test_discover_rate_limited_is_failure() -> None:
     request = _discovery_request(query="rate limited")
     url = _patents_query_url({"_text_any": {"patent_title": "rate limited"}})
@@ -180,6 +202,28 @@ def test_acquire_captures_patent_record_with_hash() -> None:
     assert result.content_sha256 == sha256(response.body).hexdigest()
 
 
+def test_acquire_rejects_a_successful_non_patent_payload() -> None:
+    url = _patents_query_url({"patent_id": "10000000"})
+    adapter = PatentsViewPatentSource(
+        RecordedHttpTransport(
+            {
+                url: HttpResponse(
+                    status=200,
+                    headers={"content-type": "text/html"},
+                    body=b"<html><title>API transition</title></html>",
+                )
+            }
+        ),
+        now=_now,
+    )
+
+    result = asyncio.run(adapter.acquire(_acquisition_request()))
+
+    assert result.status is AcquisitionStatus.FAILED
+    assert result.failure is not None
+    assert result.failure.safe_code == "invalid_provider_payload"
+
+
 def test_acquire_not_found_is_failure() -> None:
     url = _patents_query_url({"patent_id": "404"})
     adapter = PatentsViewPatentSource(
@@ -199,9 +243,7 @@ def test_acquire_not_found_is_failure() -> None:
 def test_acquire_rejects_non_patents_url() -> None:
     adapter = PatentsViewPatentSource(RecordedHttpTransport({}), now=_now)
 
-    result = asyncio.run(
-        adapter.acquire(_acquisition_request("https://github.com/octocat"))
-    )
+    result = asyncio.run(adapter.acquire(_acquisition_request("https://github.com/octocat")))
 
     assert result.status is AcquisitionStatus.FAILED
     assert result.failure is not None

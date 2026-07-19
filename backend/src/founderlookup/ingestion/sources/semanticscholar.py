@@ -91,10 +91,7 @@ class SemanticScholarResearchSource:
             request_count += 1
             limit = min(retrieval.max_results, _MAX_LIMIT)
             query = urllib.parse.quote(retrieval.query, safe="")
-            url = (
-                f"{_API_ROOT}/author/search?query={query}&limit={limit}"
-                f"&fields={_SEARCH_FIELDS}"
-            )
+            url = f"{_API_ROOT}/author/search?query={query}&limit={limit}&fields={_SEARCH_FIELDS}"
             operation_id = f"{_ADAPTER_ID}:discover:{retrieval.retrieval_request_id}"
             try:
                 response = await self._transport.get(

@@ -227,8 +227,8 @@ def _claim(
     trust: ClaimTrustScore | None = None,
 ) -> Claim:
     if trust is None:
-        trust = _unsupported_trust() if status is ClaimStatus.UNSUPPORTED else _scored_trust(
-            supporting
+        trust = (
+            _unsupported_trust() if status is ClaimStatus.UNSUPPORTED else _scored_trust(supporting)
         )
     return Claim(
         claim_id=claim_id,
@@ -347,9 +347,7 @@ def test_result_rejects_mis_stanced_citation() -> None:
     # A claim that cites CONTEXT-stance evidence as "supporting" is incoherent and rejected.
     request = _request("market-stance")
     ctx = _evidence("ctx-ev", "mkt-claim-1", EvidenceStance.CONTEXT)
-    claim = _claim(
-        "mkt-claim-1", ClaimStatus.SUPPORTED, subject=COMPANY, supporting=("ctx-ev",)
-    )
+    claim = _claim("mkt-claim-1", ClaimStatus.SUPPORTED, subject=COMPANY, supporting=("ctx-ev",))
     read = assess_market_axis(
         [],
         coverage=_coverage(CoverageLevel.LOW),
@@ -764,9 +762,7 @@ def _recommendation(claim_ids: tuple[str, ...]) -> Recommendation:
 def _memo_result(request: AnalysisRequest) -> MemoSynthesisResult:
     m1, e1 = _supported("memo-claim-1", "memo-ev-1", COMPANY)
     m2, e2 = _supported("memo-claim-2", "memo-ev-2", COMPANY)
-    sections = _memo_sections(
-        snapshot_claims=("memo-claim-1",), traction_claims=("memo-claim-2",)
-    )
+    sections = _memo_sections(snapshot_claims=("memo-claim-1",), traction_claims=("memo-claim-2",))
     return MemoSynthesisResult(
         header=_header(request),
         memo=_memo(sections),

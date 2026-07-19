@@ -42,6 +42,11 @@ describe('FounderLookup starter workflow', () => {
     expect(unknownHandling).toHaveAttribute('role', 'combobox')
     expect(unknownHandling.closest('.ant-select')).toHaveTextContent('Include Unknown')
     expect(screen.getByText(/Search silence never proves a negative/i)).toBeVisible()
+    const firstCandidate = screen.getByRole('heading', { name: 'Sable Systems' }).closest('article')
+    expect(firstCandidate).not.toBeNull()
+    await userEvent.click(within(firstCandidate!).getByRole('button', {
+      name: /Audit source, timing, unknowns, and contact/i,
+    }))
     expect(screen.getAllByText(/Unknown:/i).length).toBeGreaterThan(0)
   })
 
@@ -76,6 +81,11 @@ describe('FounderLookup starter workflow', () => {
     expect(within(nonReadyOutboundCard!).queryByRole('button', { name: 'Activate candidate' })).not.toBeInTheDocument()
     expect(within(nonReadyOutboundCard!).getByRole('button', { name: 'Run preliminary assessment' })).toBeVisible()
 
+    const candidateAudit = within(outboundCard!).getByRole('button', {
+      name: /Audit source, timing, unknowns, and contact/i,
+    })
+    expect(candidateAudit).toHaveAttribute('aria-expanded', 'false')
+    await user.click(candidateAudit)
     const publicRoutes = within(outboundCard!).getByRole('button', { name: /Public follow-up routes/i })
     expect(publicRoutes).toHaveAttribute('aria-expanded', 'false')
     await user.click(publicRoutes)
@@ -224,7 +234,7 @@ describe('FounderLookup starter workflow', () => {
     await screen.findByRole('heading', { name: 'Start with your company and deck' })
 
     await user.type(screen.getByLabelText(/Company name/i), 'Orchid Compute')
-    expect(screen.getByText('Maximum 10 MiB')).toBeVisible()
+    expect(screen.getByText('PDF · up to 10 MiB')).toBeVisible()
     const deck = new File(['fixture deck'], 'orchid-deck.pdf', { type: 'application/pdf' })
     const readDeck = deck.arrayBuffer.bind(deck)
     vi.spyOn(deck, 'arrayBuffer').mockImplementationOnce(async () => {
@@ -256,6 +266,60 @@ describe('FounderLookup starter workflow', () => {
     expect(submit).toHaveBeenCalledTimes(2)
     expect(submit.mock.calls[0]?.[0].idempotencyKey).toBe(submit.mock.calls[1]?.[0].idempotencyKey)
   })
+
+  it('keeps optional company and repeatable founder details progressive and validates profile URLs', async () => {
+    const user = userEvent.setup()
+    const client = new FixtureFounderLookupClient()
+    const submit = vi.spyOn(client, 'submitApplication')
+    globalThis.location.hash = '#/apply'
+    render(<App client={client} />)
+    await screen.findByRole('heading', { name: 'Start with your company and deck' })
+
+    expect(screen.queryByLabelText('Company website')).toBeNull()
+    const optionalDetails = screen.getByRole('button', { name: /Add founder details \(optional\)/i })
+    expect(optionalDetails).toHaveAttribute('aria-expanded', 'false')
+    await user.click(optionalDetails)
+    await waitFor(() => expect(screen.getByLabelText('Company website')).toBeVisible())
+
+    await user.type(screen.getByLabelText('Company name'), 'Orchid Compute')
+    await user.type(screen.getByLabelText('Company website'), 'https://orchid.example')
+    await user.type(screen.getByLabelText('One-line pitch'), 'Reliable inference infrastructure for regulated teams.')
+    await user.click(screen.getByRole('button', { name: 'Add founder' }))
+    await user.click(screen.getByRole('button', { name: 'Add founder' }))
+
+    const firstFounder = screen.getByRole('group', { name: 'Founder 1' })
+    const secondFounder = screen.getByRole('group', { name: 'Founder 2' })
+    await user.type(within(firstFounder).getByLabelText('Full name'), 'Ada Rivera')
+    await user.type(within(firstFounder).getByLabelText('Role or title'), 'CEO')
+    await user.type(within(firstFounder).getByLabelText('LinkedIn URL'), 'https://example.com/ada')
+    await user.click(within(secondFounder).getByRole('button', { name: 'Remove founder 2' }))
+
+    const deck = new File(['fixture deck'], 'orchid-deck.pdf', { type: 'application/pdf' })
+    await user.upload(screen.getByLabelText(/Pitch deck/i), deck)
+    await user.click(screen.getByRole('button', { name: 'Submit application' }))
+    expect((await screen.findAllByText(/Use an https:\/\/linkedin.com\/in/i)).length).toBeGreaterThan(0)
+    expect(submit).not.toHaveBeenCalled()
+
+    await user.clear(within(firstFounder).getByLabelText('LinkedIn URL'))
+    await user.type(within(firstFounder).getByLabelText('LinkedIn URL'), 'https://www.linkedin.com/in/ada-rivera')
+    await user.type(within(firstFounder).getByLabelText('GitHub URL'), 'https://github.com/adarivera')
+    await user.type(within(firstFounder).getByLabelText('Previous companies'), 'Acme, Northstar')
+    await user.click(screen.getByRole('button', { name: 'Submit application' }))
+
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce())
+    expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+      companyName: 'Orchid Compute',
+      website: 'https://orchid.example',
+      oneLinePitch: 'Reliable inference infrastructure for regulated teams.',
+      founders: [{
+        fullName: 'Ada Rivera',
+        roleTitle: 'CEO',
+        linkedinUrl: 'https://www.linkedin.com/in/ada-rivera',
+        githubUrl: 'https://github.com/adarivera',
+        previousCompanies: ['Acme', 'Northstar'],
+      }],
+    }))
+  }, 15_000)
 
   it('restores a founder status hash through the capability-scoped client call only', async () => {
     const capability = 'private/status-capability'
@@ -297,14 +361,15 @@ describe('FounderLookup starter workflow', () => {
     render(<App />)
     await screen.findByRole('heading', { name: 'Sable Systems', level: 1 })
 
-    expect(screen.getByRole('heading', { name: 'needs information' })).toBeVisible()
-    expect(screen.queryByRole('radio', { name: /Advance/i })).not.toBeInTheDocument()
-    expect(screen.getByText(/Advance is unavailable until Decision Readiness is Ready/i)).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Needs information' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Decision form/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Advance with accepted risk/i })).toBeInTheDocument()
+    expect(screen.getByText(/Demo mode: advancing records explicit accepted risk/i)).toBeVisible()
     expect(screen.getByRole('button', { name: /Audit the cited memo/i })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
-    await user.click(screen.getByRole('button', { name: 'Review Decision' }))
+    await user.click(screen.getByRole('button', { name: 'Review and confirm' }))
     expect(screen.getByRole('dialog', { name: /Record “request more information”/i })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Record Decision · no funds move' }))
 
@@ -327,7 +392,7 @@ describe('FounderLookup starter workflow', () => {
     const initialRationale = (rationale as HTMLTextAreaElement).value
     await user.type(rationale, ' Preserve this reviewed rationale after failure.')
     const preservedRationale = `${initialRationale} Preserve this reviewed rationale after failure.`
-    await user.click(screen.getByRole('button', { name: 'Review Decision' }))
+    await user.click(screen.getByRole('button', { name: 'Review and confirm' }))
 
     const dialog = screen.getByRole('dialog', {
       name: /Record “request more information”/i,
@@ -389,6 +454,8 @@ describe('FounderLookup starter workflow', () => {
     expect(await screen.findByRole('heading', { name: 'Find signals, keep uncertainty' })).toBeVisible()
     expect(credential).toBe('session-only-key')
     expect(screen.queryByRole('link', { name: /Founder apply/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Protected API workspace|Fixture workspace/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lock workspace' })).toBeVisible()
   })
 
   it('uses stable Opportunity IDs in detail and memo routes', async () => {

@@ -34,9 +34,7 @@ from founderlookup.domain.evidence import (
 )
 
 HACKATHON_PROJECTION_VERSION: Final = "hackathon-showcase-projection.v0"
-PUBLIC_HACKATHON_DECK_RELATIONSHIP_VERSION: Final = (
-    "public-hackathon-deck-relationship.v0"
-)
+PUBLIC_HACKATHON_DECK_RELATIONSHIP_VERSION: Final = "public-hackathon-deck-relationship.v0"
 
 _HEADING = re.compile(r"^\s{0,3}(?P<marks>#{1,6})\s+(?P<value>.+?)\s*$")
 _BULLET = re.compile(r"^\s*[-+*]\s+(?P<value>.+?)\s*$")
@@ -151,7 +149,10 @@ class PublicHackathonDeckRelationship(DomainModel):
     candidate_id: StableId
     showcase_source_artifact_id: StableId
     deck_source_artifact_id: StableId
+    # Exact link published by the showcase; a normalized fetch target never replaces it.
     deck_original_url: NonBlankStr
+    deck_acquisition_url: NonBlankStr
+    deck_url_normalization: Literal["direct_pdf", "google_slides_export_pdf"]
     showcase_locator: SourceLocator
     acquired_at: UTCDateTime
     classification: Literal[DataClassification.PUBLIC] = DataClassification.PUBLIC
@@ -164,6 +165,8 @@ def link_public_hackathon_deck(
     link: PublicHackathonLink,
     deck_source_artifact: SourceArtifact,
     candidate_id: str,
+    acquisition_url: str | None = None,
+    url_normalization: Literal["direct_pdf", "google_slides_export_pdf"] = "direct_pdf",
 ) -> PublicHackathonDeckRelationship:
     """Link only the exact explicitly labelled deck URL; never infer a nearby document."""
 
@@ -171,8 +174,9 @@ def link_public_hackathon_deck(
         raise ValueError("public deck relationship requires an explicit pitch-deck link")
     if deck_source_artifact.classification is not DataClassification.PUBLIC:
         raise ValueError("public deck relationship requires a public deck Source Artifact")
-    if deck_source_artifact.origin_locator != link.url:
-        raise ValueError("acquired deck origin must exactly match the showcase link")
+    resolved_acquisition_url = acquisition_url or link.url
+    if deck_source_artifact.origin_locator != resolved_acquisition_url:
+        raise ValueError("acquired deck origin must exactly match the acquisition URL")
     if deck_source_artifact.source_artifact_id == projection.source_artifact_id:
         raise ValueError("showcase page and separately acquired deck must be distinct artifacts")
     material = "\x1f".join(
@@ -180,6 +184,8 @@ def link_public_hackathon_deck(
             projection.projection_id,
             candidate_id,
             link.url,
+            resolved_acquisition_url,
+            url_normalization,
             deck_source_artifact.source_artifact_id,
             deck_source_artifact.artifact_version_id,
             PUBLIC_HACKATHON_DECK_RELATIONSHIP_VERSION,
@@ -194,6 +200,8 @@ def link_public_hackathon_deck(
         showcase_source_artifact_id=projection.source_artifact_id,
         deck_source_artifact_id=deck_source_artifact.source_artifact_id,
         deck_original_url=link.url,
+        deck_acquisition_url=resolved_acquisition_url,
+        deck_url_normalization=url_normalization,
         showcase_locator=link.locator,
         acquired_at=deck_source_artifact.retrieved_at,
     )

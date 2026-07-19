@@ -1,9 +1,10 @@
 # FounderLookup backend
 
-Python/FastAPI backend for the VC Brain MVP. The project uses a `src/` layout, is managed
+Python/FastAPI backend for the VC Brain MVP. The project uses a `src/` layout and is managed
 with `uv`. Tavily is the human-selected P0 generic public-web provider and is integrated through
-direct bounded HTTP behind provider-neutral ports, so no provider SDK enters the domain. No
-investment-model or agent-framework dependency is present before its separate human gate.
+direct bounded HTTP behind provider-neutral ports. GPT-5.6 Luna is optional behind structured
+analysis/extraction seams, and LangGraph is confined to the bounded outbound retrieval state
+machine; neither provider nor framework enters the domain contracts.
 
 ## Prerequisites
 
@@ -63,8 +64,28 @@ later persistence/worker change.
 No environment file is required for the health endpoint. `.env` and `.data/` are ignored so
 credentials and private local artifacts are not committed.
 
+## Docker and Railway deployment
+
+The production image runs as a non-root user, binds `${PORT:-8000}`, stores SQLite/private
+artifacts under `/app/data`, and checks `GET /health`. Build and smoke-test it from `backend/`:
+
+```bash
+docker build -t founderlookup-backend .
+docker run --rm -p 8000:8000 --env-file .env founderlookup-backend
+curl --fail http://127.0.0.1:8000/health
+```
+
+For Railway, create a service with `backend/` as its root; `railway.toml` selects the Dockerfile
+and `/health`. Attach a persistent volume at `/app/data` and configure secrets in Railway rather
+than committing `.env`. At minimum set a strong `FOUNDERLOOKUP_INVESTOR_API_KEY`, explicit CORS
+origins, `FOUNDERLOOKUP_ENV=production`, and the public frontend origin. Provider keys remain
+optional and do not enable calls by themselves. If fictional seeded data is intentionally used in
+that production demo, both demo-seed flags are required. The documented process-local projection
+and background-worker limitations still apply after deployment.
+
 `FOUNDERLOOKUP_ENV` accepts `development`, `test`, or `production`. Fictional demo seeding is
-rejected in production. `FOUNDERLOOKUP_LOG_LEVEL` accepts the standard `DEBUG`, `INFO`,
+off by default; production requires both the seed flag and its separate production-demo
+acknowledgement. `FOUNDERLOOKUP_LOG_LEVEL` accepts the standard `DEBUG`, `INFO`,
 `WARNING`, `ERROR`, or `CRITICAL` levels and configures the `founderlookup` package logger without
 logging credentials, provider bodies, or acquired content.
 
@@ -148,12 +169,32 @@ telemetry, never Evidence. Only approved public HTTP(S) original URLs can be acq
 private-network, credential-bearing, nonstandard-port, denied, and non-public targets are rejected.
 Acquired bytes become protected immutable Source Artifacts with exact origin provenance.
 
+Outbound convergence is a thin LangGraph `StateGraph`: `plan` → `retrieve_structure` →
+`assess_gaps`, followed by either one bounded follow-up or `finalize`. The configured
+`FOUNDERLOOKUP_SOURCING_MAX_FOLLOW_UP_ROUNDS` and
+`FOUNDERLOOKUP_SOURCING_MAX_DISCOVERY_CALLS` supplement the existing result, page, byte, cache,
+and per-provider timeout ceilings. Each run persists its queries, round counts, accepted Evidence
+delta, remaining gaps, partial-failure state, and terminal stop reason. Graph state never activates
+a candidate, sends outreach, verifies identity, records a Decision, or becomes canonical Memory.
+
 Structured public records project only explicit allowlisted fields into Observations, Evidence,
 and unverified Claims. Founder identity stays Unknown unless a later reviewed identity workflow
 links it; handles and showcase participant display names never trigger a silent merge. Public
 hackathon/showcase pages may link an explicitly labeled public pitch deck, which is acquired as a
-separate artifact and related back to the same unresolved candidate. The runtime never activates a
-candidate, sends outreach, records a Decision, or treats source silence as a negative signal.
+separate artifact and related back to the same unresolved candidate. They may also publish a
+website, contact page, public email, public profile, or other public follow-up route. Every accepted
+route retains its stable id, kind, exact value, validated optional link target, `public`
+classification, source artifact/name/locator, and collection time; no route is inferred or enriched
+from private data. The runtime never activates a candidate, sends outreach, records a Decision, or
+treats source silence as a negative signal.
+
+Optional GPT-5.6 Luna extraction runs only after a PUBLIC page has been acquired. Enable it with a
+server-side key and `FOUNDERLOOKUP_OPENAI_STRUCTURED_ENABLED=true`; a key alone does nothing. The
+direct Responses request uses `store=false`, strict Pydantic-derived Structured Outputs, and
+configured input/output/response-byte/time bounds. Deterministic projection accepts only exact
+input lines/excerpts and URLs that pass public-source policy, records returned model/usage and safe
+failure metadata, and falls back to deterministic parsing. This sourcing path rejects non-public
+artifacts regardless of `FOUNDERLOOKUP_OPENAI_ALLOW_PRIVATE`.
 
 Each artifact receives a collection-policy sidecar. Source terms and robots facts remain visibly
 Unknown until this deployment records reviewed facts; enabling an adapter is not a claim that those
@@ -174,6 +215,15 @@ entering setup data, set this explicit local flag in `.env` and restart the back
 ```dotenv
 FOUNDERLOOKUP_DEMO_SEED_ENABLED=true
 ```
+
+Development keeps this as a single explicit opt-in. Production mode additionally requires:
+
+```dotenv
+FOUNDERLOOKUP_DEMO_SEED_PRODUCTION_ACKNOWLEDGED=true
+```
+
+That second flag acknowledges that clearly labeled fictional, process-local records are being
+shown from a production deployment. It does not make them live sourcing results or Evidence.
 
 The bootstrap creates one fictional default thesis and one clearly labeled fictional outbound
 candidate with two fictional public-source handles. It registers only explicit fictional signals
@@ -207,6 +257,13 @@ material remain blocked unless all of the following are explicitly configured an
 - an approved retention or Zero Data Retention posture is recorded;
 - the permitted processing region is recorded and confirmed;
 - the OCR-only processing purpose is recorded and confirmed.
+
+For the hackathon demo only, the normal training/retention/region confirmations may be replaced by
+the explicit `FOUNDERLOOKUP_MISTRAL_OCR_HACKATHON_PRIVATE_RISK_ACCEPTED=true` acknowledgement.
+That path still requires OCR enabled, private transfer allowed, and a non-blank OCR purpose with
+purpose confirmation. It records acceptance of unknown provider/account controls; it must not be
+presented as training opt-out, Zero Data Retention, or region confirmation. A Mistral key or the
+risk flag by itself never authorizes a private transfer.
 
 Restricted material is never sent to external OCR, even when the non-public controls are fully
 confirmed.
@@ -257,7 +314,8 @@ contracts and must not leak provider payload types into `domain/`.
 ## Dependency gates
 
 Tavily is the only approved P0 generic web provider; do not add Exa or a second generic provider
-without a later OpenSpec decision. Do not add an investment-model SDK, LangGraph, LangChain,
-LlamaIndex, or another orchestration framework until its separate human gate is completed and
-recorded. The direct HTTP Mistral OCR adapter remains limited to extraction and does not approve
-investment analysis.
+without a later OpenSpec decision. The resolved gate permits GPT-5.6 Luna behind the existing
+framework-neutral analysis/extraction interfaces and LangGraph only for the thin bounded outbound
+retrieval state machine. Adding another model provider, expanding LangGraph into analysis or
+autonomous actions, or adding LangChain/LlamaIndex requires a later recorded decision. The direct
+HTTP Mistral OCR adapter remains limited to extraction and does not approve investment analysis.

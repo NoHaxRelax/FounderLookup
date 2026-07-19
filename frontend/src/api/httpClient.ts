@@ -264,6 +264,24 @@ export class HttpFounderLookupClient implements FounderLookupClient {
     const form = new FormData()
     form.set('company_name', input.companyName)
     form.set('deck', input.deck)
+    if (input.website) form.set('website', input.website)
+    if (input.oneLinePitch) form.set('one_line_pitch', input.oneLinePitch)
+    if (input.location) form.set('location', input.location)
+    if (input.stage) form.set('stage', input.stage)
+    if (input.contactEmail) form.set('contact_email', input.contactEmail)
+    if (input.founders?.length) {
+      form.set('founders', JSON.stringify(input.founders.map((founder) => ({
+        full_name: founder.fullName,
+        ...(founder.roleTitle ? { role_title: founder.roleTitle } : {}),
+        ...(founder.email ? { email: founder.email } : {}),
+        ...(founder.linkedinUrl ? { linkedin_url: founder.linkedinUrl } : {}),
+        ...(founder.githubUrl ? { github_url: founder.githubUrl } : {}),
+        ...(founder.previousCompanies?.length
+          ? { previous_companies: founder.previousCompanies }
+          : {}),
+        ...(founder.background ? { background: founder.background } : {}),
+      }))))
+    }
     if (input.outboundCandidateId) form.set('outbound_candidate_id', input.outboundCandidateId)
 
     const wire = await this.#request<WireApplicationReceipt>(

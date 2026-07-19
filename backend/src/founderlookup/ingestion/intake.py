@@ -12,7 +12,12 @@ from typing import Annotated, Final, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import Field, model_validator
 
-from founderlookup.application.ports import AcceptedApplication, IntakeSubmission
+from founderlookup.application.ports import (
+    AcceptedApplication,
+    ApplicationFounderProfile,
+    ApplicationSubmittedMetadata,
+    IntakeSubmission,
+)
 from founderlookup.domain.common import (
     DomainModel,
     KnowledgeValue,
@@ -160,6 +165,15 @@ class ApplicationOptionalValues(DomainModel):
     geography: KnowledgeValue[str] = Field(default_factory=_unknown_text)
     traction: KnowledgeValue[str] = Field(default_factory=_unknown_text)
     financing: KnowledgeValue[str] = Field(default_factory=_unknown_text)
+    company_website: KnowledgeValue[str] = Field(default_factory=_unknown_text)
+    one_line_pitch: KnowledgeValue[str] = Field(default_factory=_unknown_text)
+    location: KnowledgeValue[str] = Field(default_factory=_unknown_text)
+    contact_email: KnowledgeValue[str] = Field(default_factory=_unknown_text)
+    founders: KnowledgeValue[tuple[ApplicationFounderProfile, ...]] = Field(
+        default_factory=lambda: KnowledgeValue[tuple[ApplicationFounderProfile, ...]].unknown(
+            "not_provided_at_intake"
+        )
+    )
 
 
 class ApplicationIntakeRecord(DomainModel):
@@ -179,6 +193,9 @@ class ApplicationIntakeRecord(DomainModel):
     extraction: KnowledgeValue[PdfExtractionResult] = Field(default_factory=_pending_extraction)
     extraction_attempts: tuple[PdfExtractionAttempt, ...] = ()
     optional_values: ApplicationOptionalValues = Field(default_factory=ApplicationOptionalValues)
+    submitted_metadata: ApplicationSubmittedMetadata = Field(
+        default_factory=lambda: ApplicationSubmittedMetadata()
+    )
 
 
 class ApplicationReservation(DomainModel):
@@ -353,6 +370,34 @@ def normalize_display_name(value: str) -> str:
     return normalized
 
 
+def _optional_text(value: str | None) -> KnowledgeValue[str]:
+    return (
+        KnowledgeValue[str].unknown("not_provided_at_intake")
+        if value is None
+        else KnowledgeValue[str].known(value)
+    )
+
+
+def _optional_values(metadata: ApplicationSubmittedMetadata) -> ApplicationOptionalValues:
+    founders = (
+        KnowledgeValue[tuple[ApplicationFounderProfile, ...]].unknown("not_provided_at_intake")
+        if not metadata.founders
+        else KnowledgeValue[tuple[ApplicationFounderProfile, ...]].known(metadata.founders)
+    )
+    first = metadata.founders[0] if metadata.founders else None
+    return ApplicationOptionalValues(
+        founder_name=_optional_text(None if first is None else first.full_name),
+        founder_email=_optional_text(None if first is None else first.email),
+        stage=_optional_text(metadata.stage),
+        geography=_optional_text(metadata.location),
+        company_website=_optional_text(metadata.website),
+        one_line_pitch=_optional_text(metadata.one_line_pitch),
+        location=_optional_text(metadata.location),
+        contact_email=_optional_text(metadata.contact_email),
+        founders=founders,
+    )
+
+
 def _normalize_idempotency_key(value: str) -> str:
     normalized = unicodedata.normalize("NFC", value).strip()
     if not normalized or len(normalized) > _IDEMPOTENCY_KEY_MAX_LENGTH:
@@ -433,6 +478,7 @@ class ApplicationIntakeService:
                 "canonical_company_id": submission.canonical_company_id,
                 "media_type": media_type,
                 "content_sha256": content_sha256,
+                "submitted_metadata": submission.metadata.model_dump(mode="json"),
             }
         )
         received_at = self._clock()
@@ -467,6 +513,8 @@ class ApplicationIntakeService:
             ),
             deck_size_bytes=len(content),
             received_at=received_at,
+            optional_values=_optional_values(submission.metadata),
+            submitted_metadata=submission.metadata,
         )
         try:
             reservation = self._repository.reserve_application(candidate)
@@ -502,6 +550,8 @@ class ApplicationIntakeService:
             source_artifact_id=record.source_artifact.source_artifact_id,
             source_artifact_sha256=record.source_artifact.content_sha256,
             received_at=record.received_at,
+            company_name=record.company_name,
+            metadata=record.submitted_metadata,
             replayed=not reservation.created,
         )
 

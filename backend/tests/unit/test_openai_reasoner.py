@@ -89,7 +89,11 @@ async def test_extract_uses_strict_structured_outputs_without_provider_storage()
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         provider = AsyncOpenAI(api_key=api_key, http_client=http_client)
-        reasoner = OpenAIReasoner(provider)
+        reasoner = OpenAIReasoner(
+            provider,
+            max_output_tokens=321,
+            timeout_seconds=7.5,
+        )
         result = await reasoner.extract(
             schema=_FounderSignal,
             instructions="Extract only explicit founder signals.",
@@ -101,6 +105,7 @@ async def test_extract_uses_strict_structured_outputs_without_provider_storage()
         evidence_excerpt="Signal Forge builds public tooling.",
     )
     assert captured["model"] == "gpt-5.6-luna"
+    assert captured["max_output_tokens"] == 321
     assert captured["store"] is False
     assert captured["reasoning"] == {"effort": "low"}
     text = captured["text"]
@@ -113,3 +118,11 @@ async def test_extract_uses_strict_structured_outputs_without_provider_storage()
     assert isinstance(schema, dict)
     assert schema["additionalProperties"] is False
 
+
+def test_reasoner_rejects_unbounded_request_limits() -> None:
+    provider = AsyncOpenAI(api_key="fictional-openai-reasoner-key")
+
+    with pytest.raises(ValueError, match="max_output_tokens"):
+        OpenAIReasoner(provider, max_output_tokens=0)
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        OpenAIReasoner(provider, timeout_seconds=0)

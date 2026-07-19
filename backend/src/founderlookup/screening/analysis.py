@@ -87,9 +87,7 @@ class AnalysisFinding(DomainModel):
         if self.conclusion.state is KnowledgeState.KNOWN and (
             not self.supporting_claim_ids or not self.supporting_evidence_ids
         ):
-            raise ValueError(
-                "known finding requires supporting Claim and Evidence citations"
-            )
+            raise ValueError("known finding requires supporting Claim and Evidence citations")
         if self.conclusion.state is not KnowledgeState.KNOWN and not self.gap_ids:
             raise ValueError("unknown finding requires an explicit gap")
         return self
@@ -112,9 +110,7 @@ class StructuredAnalysis(DomainModel):
     @model_validator(mode="after")
     def require_declared_gap_references(self) -> Self:
         gap_ids = {gap.gap_id for gap in self.gaps}
-        referenced_gap_ids = {
-            gap_id for finding in self.findings for gap_id in finding.gap_ids
-        }
+        referenced_gap_ids = {gap_id for finding in self.findings for gap_id in finding.gap_ids}
         if not referenced_gap_ids.issubset(gap_ids):
             raise ValueError("an analysis finding references an undeclared gap")
         return self
@@ -257,13 +253,9 @@ class MemoSynthesis(DomainModel):
             raise ValueError("memo Opportunity must match the requested subject")
         memo_sections = {section.kind for section in self.memo.sections}
         cited_sections = tuple(item.section for item in self.section_citations)
-        if len(cited_sections) != len(set(cited_sections)) or set(
-            cited_sections
-        ) != memo_sections:
+        if len(cited_sections) != len(set(cited_sections)) or set(cited_sections) != memo_sections:
             raise ValueError("citation records must exactly mirror memo sections")
-        citations_by_section = {
-            citation.section: citation for citation in self.section_citations
-        }
+        citations_by_section = {citation.section: citation for citation in self.section_citations}
         for section in self.memo.sections:
             citation = citations_by_section[section.kind]
             if section.content.state is KnowledgeState.KNOWN and (
@@ -275,12 +267,9 @@ class MemoSynthesis(DomainModel):
             if set(citation.claim_ids) != set(section.material_claim_ids) or (
                 section.material_claim_ids and not citation.evidence_ids
             ):
-                raise ValueError(
-                    "memo material Claim citations must include their Evidence"
-                )
-            if (
-                section.content.state is not KnowledgeState.KNOWN
-                and section.kind not in {gap.memo_section for gap in self.gaps}
-            ):
+                raise ValueError("memo material Claim citations must include their Evidence")
+            if section.content.state is not KnowledgeState.KNOWN and section.kind not in {
+                gap.memo_section for gap in self.gaps
+            }:
                 raise ValueError("non-known memo section requires an explicit section gap")
         return self

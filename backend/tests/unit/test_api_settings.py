@@ -83,6 +83,7 @@ def test_openai_is_explicitly_enabled_and_private_demo_use_is_separately_accepte
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     disabled = APISettings(_env_file=None)  # type: ignore[call-arg]
     assert disabled.openai_structured_enabled is False
+    assert disabled.openai_inbound_enabled is False
     assert disabled.openai_api_key is None
     assert disabled.openai_model == "gpt-5.6-luna"
 
@@ -93,15 +94,26 @@ def test_openai_is_explicitly_enabled_and_private_demo_use_is_separately_accepte
             _env_file=None,
             openai_allow_private=True,
         )
+    with pytest.raises(ValidationError, match="server-side API key"):
+        APISettings(_env_file=None, openai_inbound_enabled=True)  # type: ignore[call-arg]
+    with pytest.raises(ValidationError, match="private processing"):
+        APISettings(  # type: ignore[call-arg]
+            _env_file=None,
+            openai_inbound_enabled=True,
+            openai_api_key=SecretStr("fictional-openai-settings-key"),
+        )
 
     enabled = APISettings(  # type: ignore[call-arg]
         _env_file=None,
         openai_structured_enabled=True,
+        openai_inbound_enabled=True,
         openai_api_key=SecretStr("fictional-openai-settings-key"),
         openai_allow_private=True,
         openai_hackathon_private_risk_accepted=True,
     )
     assert enabled.openai_structured_enabled is True
+    assert enabled.openai_inbound_enabled is True
+    assert enabled.openai_inbound_max_model_calls == 5
     assert "fictional-openai-settings-key" not in repr(enabled)
 
 

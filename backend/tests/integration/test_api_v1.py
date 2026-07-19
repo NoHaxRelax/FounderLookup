@@ -13,6 +13,10 @@ from founderlookup.api import create_app
 from founderlookup.api.settings import APISettings
 from founderlookup.application.models import (
     InvestmentThesisRevision,
+    PublicContactRouteKind,
+    PublicContactRouteView,
+    SourcingLoopAuditStatus,
+    SourcingLoopAuditView,
     ThesisCriterionMode,
     ThesisDraft,
 )
@@ -500,6 +504,33 @@ async def test_activated_outbound_application_converges_on_common_screening_api(
         founder_id="founder:ink",
         source_artifact_ids=("source-artifact-01",),
     )
+    sourcing = service.start_sourcing()
+    public_route = PublicContactRouteView(
+        route_id="public-contact-route:ink",
+        kind=PublicContactRouteKind.CONTACT_PAGE,
+        label="Public contact page",
+        value="https://ink.example/contact",
+        href="https://ink.example/contact",
+        source_artifact_id="source-artifact-01",
+        source_name="Ink Robotics public launch",
+        source_locator="line:14",
+        collected_at=NOW,
+    )
+    service.publish_candidate_public_contacts(
+        candidate.outbound_candidate_id,
+        (public_route,),
+    )
+    sourcing_audit = SourcingLoopAuditView(
+        status=SourcingLoopAuditStatus.STOPPED,
+        rounds_completed=2,
+        round_limit=3,
+        stop_reason="no_new_evidence",
+        run_id=sourcing.run_id,
+    )
+    service.publish_candidate_sourcing_audit(
+        candidate.outbound_candidate_id,
+        sourcing_audit,
+    )
     preliminary = service.start_preliminary_assessment(candidate.outbound_candidate_id)
     service.activate_candidate(candidate.outbound_candidate_id)
     intake = StubIntakeService()
@@ -525,6 +556,7 @@ async def test_activated_outbound_application_converges_on_common_screening_api(
             headers={"Idempotency-Key": "outbound-application-attempt-01"},
         )
         candidates = await client.get("/api/v1/outbound-candidates", headers=_auth())
+        sourcing_status = await client.get(f"/api/v1/runs/{sourcing.run_id}", headers=_auth())
         opportunities = await client.get("/api/v1/opportunities", headers=_auth())
         opportunity_id = opportunities.json()["items"][0]["opportunity_id"]
         before_screening = await client.get(
@@ -547,6 +579,23 @@ async def test_activated_outbound_application_converges_on_common_screening_api(
     assert candidate_body["status"] == "applied"
     assert candidate_body["application_id"] == accepted.json()["application_id"]
     assert candidate_body["preliminary_assessment"]["run_id"] == preliminary.run_id
+    assert candidate_body["public_contact_routes"] == [
+        {
+            "route_id": "public-contact-route:ink",
+            "kind": "contact_page",
+            "label": "Public contact page",
+            "value": "https://ink.example/contact",
+            "href": "https://ink.example/contact",
+            "classification": "public",
+            "source_artifact_id": "source-artifact-01",
+            "source_name": "Ink Robotics public launch",
+            "source_locator": "line:14",
+            "collected_at": "2026-07-18T15:00:00Z",
+        }
+    ]
+    assert candidate_body["sourcing_audit"] == sourcing_audit.model_dump(mode="json")
+    assert sourcing_status.status_code == 200
+    assert sourcing_status.json()["sourcing_audit"] == sourcing_audit.model_dump(mode="json")
     opportunity_body = opportunities.json()["items"]
     assert len(opportunity_body) == 1
     assert opportunity_body[0]["origin"] == "outbound"
@@ -558,6 +607,10 @@ async def test_activated_outbound_application_converges_on_common_screening_api(
         preliminary.run_id,
         accepted.json()["run_id"],
     ]
+    assert before_screening.json()["public_contact_routes"] == [
+        public_route.model_dump(mode="json")
+    ]
+    assert before_screening.json()["sourcing_audit"] == sourcing_audit.model_dump(mode="json")
     assert screening.status_code == 202
     identity = screened.json()["latest_assessment"]["identity"]
     assert identity["mode"] == "full"

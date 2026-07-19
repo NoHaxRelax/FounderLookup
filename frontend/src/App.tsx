@@ -188,7 +188,9 @@ export default function App({ client = fixtureClient }: AppProps) {
   ])
 
   useEffect(() => {
-    const subject = opportunity && location.route !== 'sourcing' ? `${opportunity.company.name} · ` : ''
+    const subject = opportunity && ['opportunity', 'memo'].includes(location.route)
+      ? `${opportunity.company.name} · `
+      : ''
     document.title = `${subject}${routeTitles[location.route]} | FounderLookup`
     requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-page-title]')?.focus())
   }, [location.route, opportunity, investorUnlocked])

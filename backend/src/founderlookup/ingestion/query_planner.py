@@ -107,9 +107,7 @@ class QueryPlanRequest(DomainModel):
         # id pairing fails as a clear caller error here rather than crashing deep in plan
         # construction. Do not coerce it silently: that would rewrite caller intent.
         if self.supersedes_query_plan_version_id == self.query_plan_version_id:
-            raise ValueError(
-                "supersedes_query_plan_version_id cannot equal query_plan_version_id"
-            )
+            raise ValueError("supersedes_query_plan_version_id cannot equal query_plan_version_id")
         return self
 
 
@@ -187,65 +185,181 @@ _LEXICON: tuple[_CueRule, ...] = (
     ),
     # Geography: each place is its own equals cue. Unknown geography is
     # preserved as Unknown and never read as "outside the thesis".
-    _CueRule(("berlin",), _Field.GEOGRAPHY, _Op.EQUALS, ("Berlin",), _HARD,
-             _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("san francisco", "bay area", "sf"), _Field.GEOGRAPHY, _Op.EQUALS,
-             ("San Francisco Bay Area",), _HARD, _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("new york", "nyc"), _Field.GEOGRAPHY, _Op.EQUALS, ("New York",), _HARD,
-             _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("london",), _Field.GEOGRAPHY, _Op.EQUALS, ("London",), _HARD,
-             _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("europe", "european"), _Field.GEOGRAPHY, _Op.EQUALS, ("Europe",), _HARD,
-             _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("united states", "usa", "u.s."), _Field.GEOGRAPHY, _Op.EQUALS,
-             ("United States",), _HARD, _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("nordics", "nordic"), _Field.GEOGRAPHY, _Op.EQUALS, ("Nordics",), _HARD,
-             _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("india",), _Field.GEOGRAPHY, _Op.EQUALS, ("India",), _HARD,
-             _Policy.PRESERVE_AS_UNKNOWN),
+    _CueRule(
+        ("berlin",), _Field.GEOGRAPHY, _Op.EQUALS, ("Berlin",), _HARD, _Policy.PRESERVE_AS_UNKNOWN
+    ),
+    _CueRule(
+        ("san francisco", "bay area", "sf"),
+        _Field.GEOGRAPHY,
+        _Op.EQUALS,
+        ("San Francisco Bay Area",),
+        _HARD,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
+    _CueRule(
+        ("new york", "nyc"),
+        _Field.GEOGRAPHY,
+        _Op.EQUALS,
+        ("New York",),
+        _HARD,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
+    _CueRule(
+        ("london",), _Field.GEOGRAPHY, _Op.EQUALS, ("London",), _HARD, _Policy.PRESERVE_AS_UNKNOWN
+    ),
+    _CueRule(
+        ("europe", "european"),
+        _Field.GEOGRAPHY,
+        _Op.EQUALS,
+        ("Europe",),
+        _HARD,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
+    _CueRule(
+        ("united states", "usa", "u.s."),
+        _Field.GEOGRAPHY,
+        _Op.EQUALS,
+        ("United States",),
+        _HARD,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
+    _CueRule(
+        ("nordics", "nordic"),
+        _Field.GEOGRAPHY,
+        _Op.EQUALS,
+        ("Nordics",),
+        _HARD,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
+    _CueRule(
+        ("india",), _Field.GEOGRAPHY, _Op.EQUALS, ("India",), _HARD, _Policy.PRESERVE_AS_UNKNOWN
+    ),
     # Sector.
-    _CueRule(("ai infrastructure", "ai infra"), _Field.SECTOR, _Op.EQUALS,
-             ("AI infrastructure",), _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("artificial intelligence", "machine learning", "ai/ml", "ai", "ml"),
-             _Field.SECTOR, _Op.EQUALS, ("AI/ML",), _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("fintech", "financial technology"), _Field.SECTOR, _Op.EQUALS, ("fintech",),
-             _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("climate tech", "cleantech", "climate"), _Field.SECTOR, _Op.EQUALS,
-             ("climate tech",), _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("developer tools", "developer tooling", "devtools", "dev tools"),
-             _Field.SECTOR, _Op.EQUALS, ("developer tools",), _HARD,
-             _Policy.NEEDS_INFORMATION),
-    _CueRule(("cybersecurity", "cyber security", "infosec"), _Field.SECTOR, _Op.EQUALS,
-             ("cybersecurity",), _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("digital health", "health tech", "healthtech", "healthcare"), _Field.SECTOR,
-             _Op.EQUALS, ("healthcare",), _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("biotechnology", "biotech"), _Field.SECTOR, _Op.EQUALS, ("biotech",), _HARD,
-             _Policy.NEEDS_INFORMATION),
-    _CueRule(("saas",), _Field.SECTOR, _Op.EQUALS, ("SaaS",), _HARD,
-             _Policy.NEEDS_INFORMATION),
-    _CueRule(("robotics",), _Field.SECTOR, _Op.EQUALS, ("robotics",), _HARD,
-             _Policy.NEEDS_INFORMATION),
-    _CueRule(("blockchain", "web3", "crypto"), _Field.SECTOR, _Op.EQUALS, ("crypto",),
-             _HARD, _Policy.NEEDS_INFORMATION),
+    _CueRule(
+        ("ai infrastructure", "ai infra"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("AI infrastructure",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("artificial intelligence", "machine learning", "ai/ml", "ai", "ml"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("AI/ML",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("fintech", "financial technology"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("fintech",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("climate tech", "cleantech", "climate"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("climate tech",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("developer tools", "developer tooling", "devtools", "dev tools"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("developer tools",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("cybersecurity", "cyber security", "infosec"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("cybersecurity",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("digital health", "health tech", "healthtech", "healthcare"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("healthcare",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("biotechnology", "biotech"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("biotech",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(("saas",), _Field.SECTOR, _Op.EQUALS, ("SaaS",), _HARD, _Policy.NEEDS_INFORMATION),
+    _CueRule(
+        ("robotics",), _Field.SECTOR, _Op.EQUALS, ("robotics",), _HARD, _Policy.NEEDS_INFORMATION
+    ),
+    _CueRule(
+        ("blockchain", "web3", "crypto"),
+        _Field.SECTOR,
+        _Op.EQUALS,
+        ("crypto",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
     # Stage.
-    _CueRule(("pre-seed", "pre seed", "preseed"), _Field.STAGE, _Op.EQUALS, ("pre_seed",),
-             _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("series a",), _Field.STAGE, _Op.EQUALS, ("series_a",), _HARD,
-             _Policy.NEEDS_INFORMATION),
-    _CueRule(("series b",), _Field.STAGE, _Op.EQUALS, ("series_b",), _HARD,
-             _Policy.NEEDS_INFORMATION),
-    _CueRule(("early stage", "early-stage"), _Field.STAGE, _Op.EQUALS, ("early_stage",),
-             _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("growth stage", "growth-stage"), _Field.STAGE, _Op.EQUALS, ("growth_stage",),
-             _HARD, _Policy.NEEDS_INFORMATION),
-    _CueRule(("seed",), _Field.STAGE, _Op.EQUALS, ("seed",), _HARD,
-             _Policy.NEEDS_INFORMATION),
+    _CueRule(
+        ("pre-seed", "pre seed", "preseed"),
+        _Field.STAGE,
+        _Op.EQUALS,
+        ("pre_seed",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("series a",), _Field.STAGE, _Op.EQUALS, ("series_a",), _HARD, _Policy.NEEDS_INFORMATION
+    ),
+    _CueRule(
+        ("series b",), _Field.STAGE, _Op.EQUALS, ("series_b",), _HARD, _Policy.NEEDS_INFORMATION
+    ),
+    _CueRule(
+        ("early stage", "early-stage"),
+        _Field.STAGE,
+        _Op.EQUALS,
+        ("early_stage",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(
+        ("growth stage", "growth-stage"),
+        _Field.STAGE,
+        _Op.EQUALS,
+        ("growth_stage",),
+        _HARD,
+        _Policy.NEEDS_INFORMATION,
+    ),
+    _CueRule(("seed",), _Field.STAGE, _Op.EQUALS, ("seed",), _HARD, _Policy.NEEDS_INFORMATION),
     # Risk appetite.
-    _CueRule(("high risk", "high-risk", "contrarian", "moonshot", "frontier"),
-             _Field.RISK_APPETITE, _Op.EQUALS, ("high",), _PREF,
-             _Policy.PRESERVE_AS_UNKNOWN),
-    _CueRule(("low risk", "low-risk"), _Field.RISK_APPETITE, _Op.EQUALS, ("low",), _PREF,
-             _Policy.PRESERVE_AS_UNKNOWN),
+    _CueRule(
+        ("high risk", "high-risk", "contrarian", "moonshot", "frontier"),
+        _Field.RISK_APPETITE,
+        _Op.EQUALS,
+        ("high",),
+        _PREF,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
+    _CueRule(
+        ("low risk", "low-risk"),
+        _Field.RISK_APPETITE,
+        _Op.EQUALS,
+        ("low",),
+        _PREF,
+        _Policy.PRESERVE_AS_UNKNOWN,
+    ),
     # Traction.
     _CueRule(
         phrases=(
@@ -292,37 +406,95 @@ _LEXICON: tuple[_CueRule, ...] = (
     ),
     # Accelerator, named. A named accelerator is a verifiable factual claim, so
     # an unknown value is routed to manual review rather than auto-preserved.
-    _CueRule(("y combinator", "ycombinator", "yc-backed", "yc"), _Field.ACCELERATOR,
-             _Op.EQUALS, ("Y Combinator",), _PREF, _Policy.MANUAL_REVIEW,
-             SourceCategory.ACCELERATOR_COHORT),
-    _CueRule(("techstars-backed", "techstars"), _Field.ACCELERATOR, _Op.EQUALS,
-             ("Techstars",), _PREF, _Policy.MANUAL_REVIEW,
-             SourceCategory.ACCELERATOR_COHORT),
-    _CueRule(("entrepreneur first",), _Field.ACCELERATOR, _Op.EQUALS,
-             ("Entrepreneur First",), _PREF, _Policy.MANUAL_REVIEW,
-             SourceCategory.ACCELERATOR_COHORT),
-    _CueRule(("antler",), _Field.ACCELERATOR, _Op.EQUALS, ("Antler",), _PREF,
-             _Policy.MANUAL_REVIEW, SourceCategory.ACCELERATOR_COHORT),
+    _CueRule(
+        ("y combinator", "ycombinator", "yc-backed", "yc"),
+        _Field.ACCELERATOR,
+        _Op.EQUALS,
+        ("Y Combinator",),
+        _PREF,
+        _Policy.MANUAL_REVIEW,
+        SourceCategory.ACCELERATOR_COHORT,
+    ),
+    _CueRule(
+        ("techstars-backed", "techstars"),
+        _Field.ACCELERATOR,
+        _Op.EQUALS,
+        ("Techstars",),
+        _PREF,
+        _Policy.MANUAL_REVIEW,
+        SourceCategory.ACCELERATOR_COHORT,
+    ),
+    _CueRule(
+        ("entrepreneur first",),
+        _Field.ACCELERATOR,
+        _Op.EQUALS,
+        ("Entrepreneur First",),
+        _PREF,
+        _Policy.MANUAL_REVIEW,
+        SourceCategory.ACCELERATOR_COHORT,
+    ),
+    _CueRule(
+        ("antler",),
+        _Field.ACCELERATOR,
+        _Op.EQUALS,
+        ("Antler",),
+        _PREF,
+        _Policy.MANUAL_REVIEW,
+        SourceCategory.ACCELERATOR_COHORT,
+    ),
     # Accelerator, any. Presence-only, so it uses is_known and takes no operands.
-    _CueRule(("accelerator cohort", "accelerator alumni", "accelerator alum",
-              "accelerator"), _Field.ACCELERATOR, _Op.IS_KNOWN, (), _PREF,
-             _Policy.PRESERVE_AS_UNKNOWN, SourceCategory.ACCELERATOR_COHORT),
+    _CueRule(
+        ("accelerator cohort", "accelerator alumni", "accelerator alum", "accelerator"),
+        _Field.ACCELERATOR,
+        _Op.IS_KNOWN,
+        (),
+        _PREF,
+        _Policy.PRESERVE_AS_UNKNOWN,
+        SourceCategory.ACCELERATOR_COHORT,
+    ),
     # Source-category cues: each names where to look and emits a retrieval.
-    _source_rule(("developer activity", "active on github", "commit history",
-                  "open-source", "open source", "github", "commits"),
-                 SourceCategory.DEVELOPER_ACTIVITY),
-    _source_rule(("published research", "research papers", "published papers",
-                  "peer-reviewed", "academic research", "publications", "arxiv",
-                  "ph.d.", "phd"), SourceCategory.RESEARCH),
-    _source_rule(("patent filings", "granted patent", "patents", "patent"),
-                 SourceCategory.PATENT),
-    _source_rule(("hackathon winners", "hackathons", "hackathon"),
-                 SourceCategory.HACKATHON),
-    _source_rule(("launched on product hunt", "product launch", "product hunt",
-                  "recently launched", "launched a product"),
-                 SourceCategory.PRODUCT_LAUNCH),
-    _source_rule(("building in public", "public social", "social media", "linkedin",
-                  "twitter"), SourceCategory.PUBLIC_SOCIAL),
+    _source_rule(
+        (
+            "developer activity",
+            "active on github",
+            "commit history",
+            "open-source",
+            "open source",
+            "github",
+            "commits",
+        ),
+        SourceCategory.DEVELOPER_ACTIVITY,
+    ),
+    _source_rule(
+        (
+            "published research",
+            "research papers",
+            "published papers",
+            "peer-reviewed",
+            "academic research",
+            "publications",
+            "arxiv",
+            "ph.d.",
+            "phd",
+        ),
+        SourceCategory.RESEARCH,
+    ),
+    _source_rule(("patent filings", "granted patent", "patents", "patent"), SourceCategory.PATENT),
+    _source_rule(("hackathon winners", "hackathons", "hackathon"), SourceCategory.HACKATHON),
+    _source_rule(
+        (
+            "launched on product hunt",
+            "product launch",
+            "product hunt",
+            "recently launched",
+            "launched a product",
+        ),
+        SourceCategory.PRODUCT_LAUNCH,
+    ),
+    _source_rule(
+        ("building in public", "public social", "social media", "linkedin", "twitter"),
+        SourceCategory.PUBLIC_SOCIAL,
+    ),
 )
 
 
@@ -350,12 +522,16 @@ _STAGE_OPERANDS = _phrase_operand_map(_Field.STAGE)
 # manual review rather than silently dropped.
 _SECTOR_EXCLUSION = re.compile(
     r"\b(?:no|not|without|excluding|exclude|excludes|avoid|except)\s+("
-    + _alternation(_SECTOR_OPERANDS) + r")\b"
+    + _alternation(_SECTOR_OPERANDS)
+    + r")\b"
 )
 # A stated stage span such as "seed to series a" is ANY_OF the two named stages.
 _STAGE_RANGE = re.compile(
-    r"\b(" + _alternation(_STAGE_OPERANDS) + r")\s+(?:to|through|or)\s+("
-    + _alternation(_STAGE_OPERANDS) + r")\b"
+    r"\b("
+    + _alternation(_STAGE_OPERANDS)
+    + r")\s+(?:to|through|or)\s+("
+    + _alternation(_STAGE_OPERANDS)
+    + r")\b"
 )
 
 # Strength modifiers. HARD wins ties with PREFERENCE at equal distance.
@@ -391,22 +567,130 @@ _PREFERENCE_MODIFIERS: tuple[str, ...] = (
 # unresolved output; they carry no criterion of their own.
 _STOPWORDS: frozenset[str] = frozenset(
     {
-        "a", "an", "the", "and", "or", "but", "with", "who", "whom", "whose",
-        "that", "which", "of", "to", "in", "on", "for", "from", "at", "by", "as",
-        "is", "are", "be", "been", "being", "am", "has", "have", "had", "we",
-        "i", "our", "us", "their", "them", "they", "my", "your", "its", "it",
-        "this", "these", "those", "all", "any", "some", "more", "most", "based",
-        "me", "myself", "give", "get", "show", "please", "need", "needs", "let",
-        "find", "finding", "look", "looking", "seek", "seeking", "want", "wants",
-        "wanting", "interested", "focus", "focused", "focusing", "fund", "funds",
-        "funding", "invest", "investing", "investment", "source", "sourcing",
-        "discover", "discovering", "company", "companies", "startup", "startups",
-        "business", "businesses", "founder", "founders", "team", "teams",
-        "people", "folks", "someone", "anyone", "building", "build", "builds",
-        "work", "works", "working", "check", "checks", "write", "writing",
-        "writes", "ticket", "tickets", "size", "raise", "raising", "raised",
-        "no", "not", "without", "excluding", "exclude", "excludes", "avoid",
-        "except", "through", "other", "than",
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "with",
+        "who",
+        "whom",
+        "whose",
+        "that",
+        "which",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "from",
+        "at",
+        "by",
+        "as",
+        "is",
+        "are",
+        "be",
+        "been",
+        "being",
+        "am",
+        "has",
+        "have",
+        "had",
+        "we",
+        "i",
+        "our",
+        "us",
+        "their",
+        "them",
+        "they",
+        "my",
+        "your",
+        "its",
+        "it",
+        "this",
+        "these",
+        "those",
+        "all",
+        "any",
+        "some",
+        "more",
+        "most",
+        "based",
+        "me",
+        "myself",
+        "give",
+        "get",
+        "show",
+        "please",
+        "need",
+        "needs",
+        "let",
+        "find",
+        "finding",
+        "look",
+        "looking",
+        "seek",
+        "seeking",
+        "want",
+        "wants",
+        "wanting",
+        "interested",
+        "focus",
+        "focused",
+        "focusing",
+        "fund",
+        "funds",
+        "funding",
+        "invest",
+        "investing",
+        "investment",
+        "source",
+        "sourcing",
+        "discover",
+        "discovering",
+        "company",
+        "companies",
+        "startup",
+        "startups",
+        "business",
+        "businesses",
+        "founder",
+        "founders",
+        "team",
+        "teams",
+        "people",
+        "folks",
+        "someone",
+        "anyone",
+        "building",
+        "build",
+        "builds",
+        "work",
+        "works",
+        "working",
+        "check",
+        "checks",
+        "write",
+        "writing",
+        "writes",
+        "ticket",
+        "tickets",
+        "size",
+        "raise",
+        "raising",
+        "raised",
+        "no",
+        "not",
+        "without",
+        "excluding",
+        "exclude",
+        "excludes",
+        "avoid",
+        "except",
+        "through",
+        "other",
+        "than",
     }
 )
 
@@ -482,30 +766,66 @@ def _scan_numeric(lower: str) -> list[_Match]:
         high = _money(hit.group(3), hit.group(4))
         pair = (low, high) if low <= high else (high, low)
         matches.append(
-            _Match(hit.start(), hit.end(), _Field.CHECK_SIZE, _Op.BETWEEN, pair, _HARD,
-                   _Policy.NEEDS_INFORMATION, None, priority)
+            _Match(
+                hit.start(),
+                hit.end(),
+                _Field.CHECK_SIZE,
+                _Op.BETWEEN,
+                pair,
+                _HARD,
+                _Policy.NEEDS_INFORMATION,
+                None,
+                priority,
+            )
         )
     for hit in _CHECK_SINGLE.finditer(lower):
         word = hit.group(1)
         operator = _Op.LESS_THAN_OR_EQUAL if word in _LTE_WORDS else _Op.GREATER_THAN_OR_EQUAL
         amount = _money(hit.group(2), hit.group(3))
         matches.append(
-            _Match(hit.start(), hit.end(), _Field.CHECK_SIZE, operator, (amount,), _HARD,
-                   _Policy.NEEDS_INFORMATION, None, priority)
+            _Match(
+                hit.start(),
+                hit.end(),
+                _Field.CHECK_SIZE,
+                operator,
+                (amount,),
+                _HARD,
+                _Policy.NEEDS_INFORMATION,
+                None,
+                priority,
+            )
         )
     for hit in _CHECK_PLUS.finditer(lower):
         amount = _money(hit.group(1), hit.group(2))
         matches.append(
-            _Match(hit.start(), hit.end(), _Field.CHECK_SIZE, _Op.GREATER_THAN_OR_EQUAL,
-                   (amount,), _HARD, _Policy.NEEDS_INFORMATION, None, priority)
+            _Match(
+                hit.start(),
+                hit.end(),
+                _Field.CHECK_SIZE,
+                _Op.GREATER_THAN_OR_EQUAL,
+                (amount,),
+                _HARD,
+                _Policy.NEEDS_INFORMATION,
+                None,
+                priority,
+            )
         )
     for hit in _OWNERSHIP.finditer(lower):
         word = hit.group(1) or ""
         operator = _Op.LESS_THAN_OR_EQUAL if word in _LTE_WORDS else _Op.GREATER_THAN_OR_EQUAL
         percent = float(hit.group(2))
         matches.append(
-            _Match(hit.start(), hit.end(), _Field.OWNERSHIP_TARGET, operator, (percent,),
-                   _PREF, _Policy.NEEDS_INFORMATION, None, priority)
+            _Match(
+                hit.start(),
+                hit.end(),
+                _Field.OWNERSHIP_TARGET,
+                operator,
+                (percent,),
+                _PREF,
+                _Policy.NEEDS_INFORMATION,
+                None,
+                priority,
+            )
         )
     return matches
 
@@ -517,8 +837,17 @@ def _scan_exclusions(lower: str) -> list[_Match]:
     for hit in _SECTOR_EXCLUSION.finditer(lower):
         operand = _SECTOR_OPERANDS[hit.group(1)]
         matches.append(
-            _Match(hit.start(), hit.end(), _Field.SECTOR, _Op.NOT_EQUALS, (operand,),
-                   _HARD, _Policy.MANUAL_REVIEW, None, 900)
+            _Match(
+                hit.start(),
+                hit.end(),
+                _Field.SECTOR,
+                _Op.NOT_EQUALS,
+                (operand,),
+                _HARD,
+                _Policy.MANUAL_REVIEW,
+                None,
+                900,
+            )
         )
     return matches
 
@@ -532,8 +861,17 @@ def _scan_stage_ranges(lower: str) -> list[_Match]:
         high = _STAGE_OPERANDS[hit.group(2)]
         operands: tuple[ScalarValue, ...] = (low,) if low == high else (low, high)
         matches.append(
-            _Match(hit.start(), hit.end(), _Field.STAGE, _Op.ANY_OF, operands,
-                   _HARD, _Policy.NEEDS_INFORMATION, None, 900)
+            _Match(
+                hit.start(),
+                hit.end(),
+                _Field.STAGE,
+                _Op.ANY_OF,
+                operands,
+                _HARD,
+                _Policy.NEEDS_INFORMATION,
+                None,
+                900,
+            )
         )
     return matches
 
@@ -546,9 +884,17 @@ def _scan_lexicon(lower: str) -> list[_Match]:
         for phrase in rule.phrases:
             for start, end in _iter_phrase(lower, phrase):
                 matches.append(
-                    _Match(start, end, rule.field, rule.operator, rule.operands,
-                           rule.default_strength, rule.unknown_policy,
-                           rule.source_category, priority)
+                    _Match(
+                        start,
+                        end,
+                        rule.field,
+                        rule.operator,
+                        rule.operands,
+                        rule.default_strength,
+                        rule.unknown_policy,
+                        rule.source_category,
+                        priority,
+                    )
                 )
     matches.extend(_scan_numeric(lower))
     matches.extend(_scan_exclusions(lower))

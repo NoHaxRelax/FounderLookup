@@ -26,7 +26,7 @@ describe('responsive CSS safety rails', () => {
     expect(stylesheet).toContain('container: results-region / inline-size;')
     expect(stylesheet).toContain('@container app-root (inline-size < 60rem)')
     expect(stylesheet).toContain('@container page (inline-size < 68rem)')
-    expect(stylesheet).toMatch(/repeat\(auto-fit, minmax\(min\(100%, 10\.5rem\), 1fr\)\)/)
+    expect(stylesheet).toMatch(/repeat\(auto-fit, minmax\(min\(100%, 17rem\), 1fr\)\)/)
     expect(stylesheet).not.toMatch(/@media \((?:min|max)-width:/)
     expect(stylesheet).not.toContain('overflow-x: clip')
   })
@@ -45,12 +45,13 @@ describe('responsive CSS safety rails', () => {
     expect(stylesheet).toContain('--shadow-inset:')
     expect(stylesheet).toContain('--shadow-pressed:')
     expect(stylesheet).toMatch(/\.search-surface,[\s\S]*?box-shadow: var\(--shadow-tactile\)/)
-    expect(stylesheet).toMatch(/\.nav-link\[aria-current='page'\][\s\S]*?box-shadow: var\(--shadow-pressed\)/)
+    expect(stylesheet).toMatch(/\[role='menuitem'\]:has\(\.nav-link\[aria-current='page'\]\)[\s\S]*?box-shadow: var\(--shadow-pressed\)/)
     expect(stylesheet).not.toMatch(/\.ant-[a-z]/)
   })
 
   it('preserves explicit accessibility modes and visible keyboard focus', () => {
     expect(stylesheet).toContain(':focus-visible {')
+    expect(stylesheet).toMatch(/#root :where\([\s\S]*?outline: 3px solid var\(--jade-700\)/)
     expect(stylesheet).toContain('@media (pointer: coarse)')
     expect(stylesheet).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*?animation-duration: 0\.01ms !important;/,

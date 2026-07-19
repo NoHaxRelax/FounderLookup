@@ -75,9 +75,7 @@ def test_plan_is_stamped_and_deterministic() -> None:
 
 
 def test_recognized_cues_map_to_typed_criteria() -> None:
-    plan = _plan(
-        "We only fund pre-seed fintech companies in Europe with technical founders"
-    )
+    plan = _plan("We only fund pre-seed fintech companies in Europe with technical founders")
     assert plan.state is QueryPlanState.VALIDATED
     assert _fields(plan) == {
         QueryCriterionField.STAGE,
@@ -148,9 +146,7 @@ def test_strength_default_differs_by_field() -> None:
 
 
 def test_every_criterion_carries_an_explicit_unknown_policy() -> None:
-    plan = _plan(
-        "pre-seed fintech founders in Berlin, YC-backed, with enterprise traction"
-    )
+    plan = _plan("pre-seed fintech founders in Berlin, YC-backed, with enterprise traction")
     assert plan.criteria
     for criterion in plan.criteria:
         assert isinstance(criterion.unknown_policy, UnknownValuePolicy)
@@ -186,9 +182,7 @@ def test_qualified_single_check_maps_to_a_directional_comparison() -> None:
     assert up_to.operator is QueryOperator.LESS_THAN_OR_EQUAL
     assert up_to.operands == (2_000_000.0,)
 
-    at_least = _criterion(
-        _plan("at least $1m per check"), QueryCriterionField.CHECK_SIZE
-    )
+    at_least = _criterion(_plan("at least $1m per check"), QueryCriterionField.CHECK_SIZE)
     assert at_least.operator is QueryOperator.GREATER_THAN_OR_EQUAL
 
 
@@ -209,9 +203,7 @@ def test_bare_amount_without_a_qualifier_is_not_guessed() -> None:
 def test_source_cue_emits_a_bounded_retrieval_request() -> None:
     plan = _plan("technical founders active on GitHub", retrieval_max_pages=4)
     categories = {
-        category
-        for request in plan.retrieval_requests
-        for category in request.source_categories
+        category for request in plan.retrieval_requests for category in request.source_categories
     }
     assert SourceCategory.DEVELOPER_ACTIVITY in categories
     request = plan.retrieval_requests[0]
@@ -239,9 +231,7 @@ def test_allowed_source_categories_bounds_retrieval_emission() -> None:
         allowed_source_categories=(SourceCategory.PATENT,),
     )
     categories = {
-        category
-        for request in plan.retrieval_requests
-        for category in request.source_categories
+        category for request in plan.retrieval_requests for category in request.source_categories
     }
     assert categories == {SourceCategory.PATENT}
 
@@ -289,9 +279,7 @@ def test_stage_range_maps_to_any_of_named_stages() -> None:
     assert stage.operator is QueryOperator.ANY_OF
     assert stage.operands == ("seed", "series_a")
     # The wider range wins over the two single-stage cues it contains.
-    stage_criteria = [
-        item for item in plan.criteria if item.field is QueryCriterionField.STAGE
-    ]
+    stage_criteria = [item for item in plan.criteria if item.field is QueryCriterionField.STAGE]
     assert len(stage_criteria) == 1
 
 
