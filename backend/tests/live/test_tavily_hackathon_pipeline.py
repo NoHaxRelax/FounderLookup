@@ -3,7 +3,7 @@
 This module never auto-runs. To exercise it deliberately, provide all of:
 
 * ``FOUNDERLOOKUP_RUN_LIVE_TESTS=1``
-* ``TAVILY_API_KEY``
+* ``TAVILY_API_KEY`` and ``OPENAI_API_KEY``
 * ``FOUNDERLOOKUP_LIVE_HACKATHON_URL`` pointing to an approved public showcase
   that explicitly publishes an event, project, participant display name, repository,
   demo, and exactly one directly accessible public pitch-deck link.
@@ -47,6 +47,10 @@ from founderlookup.ingestion.hackathons import (
     IdentityReviewState,
     PublicHackathonDeckRelationship,
 )
+from founderlookup.ingestion.openai_structured import (
+    OpenAIStructuredPageExtractor,
+    OpenAIStructuredPolicy,
+)
 from founderlookup.ingestion.tavily import TavilyPolicy, TavilySource
 
 pytestmark = pytest.mark.skipif(
@@ -74,11 +78,14 @@ def _thesis() -> ThesisDraft:
     )
 
 
-def _required_environment() -> tuple[str, str, str]:
-    key = os.getenv("TAVILY_API_KEY", "").strip()
+def _required_environment() -> tuple[str, str, str, str]:
+    tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
     showcase_url = os.getenv("FOUNDERLOOKUP_LIVE_HACKATHON_URL", "").strip()
-    if not key:
+    if not tavily_key:
         pytest.skip("TAVILY_API_KEY is required for the opt-in live test")
+    if not openai_key:
+        pytest.skip("OPENAI_API_KEY is required for the opt-in live test")
     if not showcase_url:
         pytest.skip(
             "FOUNDERLOOKUP_LIVE_HACKATHON_URL is required so source terms are explicit"
@@ -86,18 +93,18 @@ def _required_environment() -> tuple[str, str, str]:
     host = (urlsplit(showcase_url).hostname or "").casefold()
     if not host:
         pytest.fail("FOUNDERLOOKUP_LIVE_HACKATHON_URL must be an absolute public URL")
-    return key, showcase_url, host
+    return tavily_key, openai_key, showcase_url, host
 
 
 @pytest.mark.anyio
 async def test_live_tavily_showcase_to_separate_deck_and_candidate(tmp_path: Path) -> None:
-    key, showcase_url, host = _required_environment()
+    tavily_key, openai_key, showcase_url, host = _required_environment()
 
     def now() -> datetime:
         return datetime.now(UTC)
 
     tavily = TavilySource(
-        api_key=SecretStr(key),
+        api_key=SecretStr(tavily_key),
         policy=TavilyPolicy(
             max_queries=1,
             max_results=2,
@@ -123,6 +130,15 @@ async def test_live_tavily_showcase_to_separate_deck_and_candidate(tmp_path: Pat
     artifact_store = PrivateArtifactStore(
         (tmp_path / "live-artifacts").absolute(),
         authorize_read=lambda _principal, _artifact: True,
+    )
+    structured_extractor = OpenAIStructuredPageExtractor(
+        api_key=SecretStr(openai_key),
+        policy=OpenAIStructuredPolicy(
+            model=os.getenv("FOUNDERLOOKUP_OPENAI_MODEL", "gpt-5.6-luna"),
+            max_output_tokens=2_000,
+            timeout_seconds=60,
+        ),
+        now=now,
     )
     coordinator = MultiAdapterSourcingCoordinator(
         adapters=(
@@ -157,6 +173,9 @@ async def test_live_tavily_showcase_to_separate_deck_and_candidate(tmp_path: Pat
         max_bytes=500_000,
         timeout_seconds=20,
         cache_ttl_seconds=0,
+        structured_page_extractor=structured_extractor,
+        max_follow_up_rounds=1,
+        max_discovery_calls=2,
     )
     query = os.getenv(
         "FOUNDERLOOKUP_LIVE_HACKATHON_QUERY",

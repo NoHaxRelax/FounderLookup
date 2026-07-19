@@ -355,6 +355,35 @@ def test_fully_confirmed_private_policy_allows_one_bounded_call() -> None:
     assert result.input_sha256 == sha256(PDF_BYTES).hexdigest()
 
 
+def test_explicit_hackathon_risk_acceptance_allows_private_without_fake_control_claims() -> None:
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=_response())
+
+    policy = MistralPrivateDataPolicy(
+        allow_private=True,
+        purpose="Hackathon pitch deck OCR extraction only",
+        purpose_confirmed=True,
+        hackathon_private_risk_accepted=True,
+    )
+    result = asyncio.run(
+        _extract(
+            settings=_settings(private_policy=policy),
+            request=_request(classification=DataClassification.FOUNDER_PRIVATE),
+            handler=handler,
+        )
+    )
+
+    assert calls == 1
+    assert result.input_sha256 == sha256(PDF_BYTES).hexdigest()
+    assert policy.training_opt_out_confirmed is False
+    assert policy.retention_posture is RetentionPosture.UNCONFIRMED
+    assert policy.region_confirmed is False
+
+
 def test_investor_internal_requires_the_full_private_policy() -> None:
     calls = 0
 

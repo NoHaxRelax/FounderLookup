@@ -114,7 +114,7 @@ The API SHALL create sourcing, ingestion, and screening work as asynchronous pip
 - **THEN** the API returns the active or linked retry-run identifier, preserves prior accepted results, and records the retry attempt without duplicating successful work
 
 ### Requirement: Outbound candidate activation is explicit
-The API SHALL expose Outbound Candidates separately from Applications and SHALL require an explicit authorized activation action to change sourcing workflow state. Activation SHALL record human intent to pursue outreach or invite an Application and MAY create a source-backed, human-editable outreach draft. Sending or copying the draft and recording contact status SHALL require an explicit human action. Activation SHALL NOT claim that outreach occurred or create an investment Decision.
+The API SHALL expose Outbound Candidates separately from Applications and SHALL require an explicit authorized activation action to change sourcing workflow state. A candidate read model MAY expose only accepted public contact routes; each route SHALL include its stable route id, kind, label, exact value, optional validated link target, `public` classification, source artifact id, source display name, exact source locator, and collection time. Activation SHALL record human intent to pursue outreach or invite an Application and MAY create a source-backed, human-editable outreach draft. Sending or copying the draft and recording contact status SHALL require an explicit human action. Activation SHALL NOT claim that outreach occurred or create an investment Decision.
 
 #### Scenario: Investor activates a candidate
 - **WHEN** an authorized investor activates an Outbound Candidate
@@ -123,6 +123,10 @@ The API SHALL expose Outbound Candidates separately from Applications and SHALL 
 #### Scenario: Investor records outreach
 - **WHEN** an authorized investor confirms that outreach was copied, sent through an approved channel, or otherwise completed
 - **THEN** the API appends the contact method, human actor, time, and status without treating the contact as an Application or Decision
+
+#### Scenario: Candidate exposes a public contact route
+- **WHEN** deterministically accepted Evidence contains a source-published website, contact page, public email, public profile, or other public route
+- **THEN** the candidate response exposes the route with complete source provenance and never substitutes an inferred private detail or a model/provider identifier
 
 #### Scenario: Candidate later applies
 - **WHEN** a minimum Application is linked to an activated candidate

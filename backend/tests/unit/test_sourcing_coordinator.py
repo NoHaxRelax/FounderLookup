@@ -20,6 +20,8 @@ from founderlookup.application.service import FakeVCBrainService
 from founderlookup.application.sourcing import (
     BoundedSourcingCommand,
     MultiAdapterSourcingCoordinator,
+    OutboundSearchLoopAudit,
+    OutboundSearchStopReason,
     PublicSourceCollectionPolicy,
     SourceAdapterBinding,
 )
@@ -195,6 +197,8 @@ def _runtime(
     bindings: tuple[SourceAdapterBinding, ...],
     *,
     max_pages: int = 5,
+    max_follow_up_rounds: int = 0,
+    max_discovery_calls: int = 12,
 ) -> tuple[MultiAdapterSourcingCoordinator, FakeVCBrainService, SQLiteMemory]:
     service_ids = count(1)
     coordinator_ids = count(1)
@@ -224,6 +228,8 @@ def _runtime(
         max_bytes=500_000,
         timeout_seconds=20,
         cache_ttl_seconds=900,
+        max_follow_up_rounds=max_follow_up_rounds,
+        max_discovery_calls=max_discovery_calls,
     )
     return coordinator, service, memory
 
@@ -449,6 +455,70 @@ async def test_recurring_replay_hits_cache_without_duplicate_artifact(tmp_path: 
         subject_id=second.run.run_id,
     )
     assert any(record.payload.get("status") == "cache_hit" for record in cache_telemetry)
+
+
+@pytest.mark.anyio
+async def test_agentic_loop_follows_one_gap_then_stops_on_no_new_evidence(
+    tmp_path: Path,
+) -> None:
+    """The graph may refine retrieval, but it must converge deterministically."""
+
+    url = "https://example.test/one-public-update"
+    source = _RecordedSource(
+        "bounded-loop-source-v0",
+        SourceCategory.COMPANY_UPDATE,
+        ((url, "One source-backed company update"),),
+        {url: (b"# One immutable public update\n", "text/markdown")},
+    )
+    coordinator, service, memory = _runtime(
+        tmp_path,
+        (
+            _binding(
+                source,
+                categories=(SourceCategory.COMPANY_UPDATE,),
+                authoritative=True,
+                kind=SourceArtifactKind.WEB_SNAPSHOT,
+                media_types=("text/markdown",),
+            ),
+        ),
+        max_follow_up_rounds=2,
+        max_discovery_calls=4,
+    )
+    # The second requested category has no configured adapter. That explicit gap causes one
+    # refined query; the unchanged artifact then proves the no-new-evidence stop condition.
+    command = _command(
+        (SourceCategory.COMPANY_UPDATE, SourceCategory.DEVELOPER_ACTIVITY),
+        max_pages=4,
+    )
+
+    accepted = coordinator.enqueue(command)
+    await coordinator.execute(accepted.run.run_id, command)
+
+    run = service.get_run(accepted.run.run_id)
+    assert run.status is PipelineRunStatus.SUCCEEDED
+    assert len(source.discovery_requests) == 2
+    queries = [request.retrieval_requests[0].query for request in source.discovery_requests]
+    assert queries[0] == command.query
+    assert queries[1] != queries[0]
+    assert "developer activity" in queries[1]
+    assert len(memory.list_records(RecordCategory.SOURCE_ARTIFACT)) == 1
+
+    audit_payload = next(
+        record.payload
+        for record in memory.list_records(
+            RecordCategory.COLLECTION_TELEMETRY,
+            subject_id=accepted.run.run_id,
+        )
+        if record.payload.get("record_type") == "outbound_search_loop"
+    )
+    audit = OutboundSearchLoopAudit.model_validate_json(json.dumps(dict(audit_payload)))
+    assert audit.stop_reason is OutboundSearchStopReason.NO_NEW_EVIDENCE
+    assert audit.maximum_follow_up_rounds == 2
+    assert audit.maximum_discovery_calls == 4
+    assert [round_item.round_index for round_item in audit.rounds] == [0, 1]
+    assert audit.rounds[0].new_evidence_count > 0
+    assert audit.rounds[1].new_evidence_count == 0
+    assert audit.outreach_action == "none"
 
 
 @pytest.mark.anyio

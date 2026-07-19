@@ -414,8 +414,14 @@ async def test_runtime_tavily_sourcing_persists_original_content_and_partial_fai
         RecordCategory.COLLECTION_TELEMETRY,
         subject_id=run.json()["run_id"],
     )
-    assert len(telemetry) == 4
-    assert search_snippet in json.dumps([dict(item.payload) for item in telemetry])
+    assert len(telemetry) == 5
+    telemetry_payloads = [dict(item.payload) for item in telemetry]
+    assert search_snippet in json.dumps(telemetry_payloads)
+    loop_audit = next(
+        item for item in telemetry_payloads if item.get("record_type") == "outbound_search_loop"
+    )
+    assert loop_audit["stop_reason"] == "partial_failure"
+    assert loop_audit["outreach_action"] == "none"
 
 
 @pytest.mark.anyio

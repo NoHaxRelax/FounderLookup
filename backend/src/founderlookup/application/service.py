@@ -36,11 +36,14 @@ from founderlookup.application.models import (
     OutboundCandidateView,
     OutreachMethod,
     OutreachRecord,
+    PipelineRunView,
     PrivateArtifactDescriptor,
+    PublicContactRouteView,
     QueryCriterionResult,
     QueryResult,
     QueryResultItem,
     RunAccepted,
+    SourcingLoopAuditView,
     StatusCapabilityRecord,
     TargetState,
     ThesisDraft,
@@ -240,6 +243,7 @@ class FakeVCBrainService:
         self._candidate_by_source_key: dict[str, str] = {}
         self._outreach: dict[str, list[OutreachRecord]] = {}
         self._runs: dict[str, PipelineRun] = {}
+        self._sourcing_audits_by_run: dict[str, SourcingLoopAuditView] = {}
         self._retry_by_parent: dict[str, str] = {}
 
     def _id(self) -> str:

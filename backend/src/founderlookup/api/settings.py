@@ -47,6 +47,7 @@ class APISettings(BaseSettings):
     maximum_collection_results: int = Field(default=100, gt=0, le=1_000)
     maximum_retry_attempts: int = Field(default=3, gt=0, le=10)
     demo_seed_enabled: bool = False
+    demo_seed_production_acknowledged: bool = False
 
     # Tavily is an explicit public-web sourcing opt-in; a key alone never enables it.
     tavily_api_key: SecretStr | None = Field(
@@ -69,6 +70,22 @@ class APISettings(BaseSettings):
     sourcing_max_content_bytes: int = Field(default=500_000, gt=0, le=5_000_000)
     sourcing_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
     sourcing_cache_ttl_seconds: int = Field(default=900, ge=0, le=86_400)
+    sourcing_max_follow_up_rounds: int = Field(default=1, ge=0, le=3)
+    sourcing_max_discovery_calls: int = Field(default=12, ge=1, le=32)
+
+    # OpenAI is an explicit structured-intelligence opt-in; a key alone never enables it.
+    openai_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias="OPENAI_API_KEY",
+    )
+    openai_structured_enabled: bool = False
+    openai_model: str = "gpt-5.6-luna"
+    openai_max_input_bytes: int = Field(default=200_000, gt=0, le=500_000)
+    openai_max_output_tokens: int = Field(default=2_000, gt=0, le=10_000)
+    openai_max_response_bytes: int = Field(default=1_000_000, gt=0, le=5_000_000)
+    openai_timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+    openai_allow_private: bool = False
+    openai_hackathon_private_risk_accepted: bool = False
 
     # Source-specific adapters are independently opt-in. GitHub authentication is optional
     # and remains server-side; the other P0 public APIs are keyless.
@@ -98,6 +115,7 @@ class APISettings(BaseSettings):
     mistral_ocr_region_confirmed: bool = False
     mistral_ocr_purpose: str | None = None
     mistral_ocr_purpose_confirmed: bool = False
+    mistral_ocr_hackathon_private_risk_accepted: bool = False
 
     @field_validator("log_level")
     @classmethod
@@ -144,8 +162,14 @@ class APISettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_policy(self) -> Self:
-        if self.environment is RuntimeEnvironment.PRODUCTION and self.demo_seed_enabled:
-            raise ValueError("fictional demo seeding cannot be enabled in production")
+        if (
+            self.environment is RuntimeEnvironment.PRODUCTION
+            and self.demo_seed_enabled
+            and not self.demo_seed_production_acknowledged
+        ):
+            raise ValueError(
+                "production demo seeding requires an explicit demo-only acknowledgement"
+            )
         if self.tavily_enabled and (
             self.tavily_api_key is None or not self.tavily_api_key.get_secret_value().strip()
         ):
@@ -154,6 +178,17 @@ class APISettings(BaseSettings):
             raise ValueError("Tavily max pages cannot exceed max results")
         if self.sourcing_max_pages > self.sourcing_max_results:
             raise ValueError("sourcing max pages cannot exceed max results")
+        if self.openai_structured_enabled and (
+            self.openai_api_key is None
+            or not self.openai_api_key.get_secret_value().strip()
+        ):
+            raise ValueError("OpenAI must have a server-side API key when enabled")
+        if not self.openai_model.strip():
+            raise ValueError("OpenAI model must be non-blank")
+        if self.openai_allow_private and not self.openai_hackathon_private_risk_accepted:
+            raise ValueError(
+                "OpenAI private processing requires explicit hackathon risk acceptance"
+            )
         if self.github_token is not None and not self.github_token.get_secret_value().strip():
             raise ValueError("GitHub token must be non-blank when supplied")
         allowed = set(self.tavily_allowed_domain_list)

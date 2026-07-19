@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, computed_field, model_validator
 
@@ -153,6 +153,46 @@ class FounderStatusView(DomainModel):
     outcome_at: UTCDateTime | None = None
 
 
+class PublicContactRouteKind(StrEnum):
+    WEBSITE = "website"
+    CONTACT_PAGE = "contact_page"
+    PUBLIC_EMAIL = "public_email"
+    PUBLIC_PROFILE = "public_profile"
+    OTHER = "other"
+
+
+class PublicContactRouteView(DomainModel):
+    """One validated source-published route; private and inferred routes cannot fit."""
+
+    route_id: StableId
+    kind: PublicContactRouteKind
+    label: NonBlankStr
+    value: NonBlankStr
+    href: NonBlankStr | None = None
+    classification: Literal["public"] = "public"
+    source_artifact_id: StableId
+    source_name: NonBlankStr
+    source_locator: NonBlankStr
+    collected_at: UTCDateTime
+
+
+class SourcingLoopAuditStatus(StrEnum):
+    RUNNING = "running"
+    STOPPED = "stopped"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class SourcingLoopAuditView(DomainModel):
+    """Concise bounded-loop audit without framework state or private reasoning."""
+
+    status: SourcingLoopAuditStatus
+    rounds_completed: NonNegativeInt
+    round_limit: PositiveInt | None = None
+    stop_reason: NonBlankStr
+    run_id: StableId | None = None
+
+
 class OutboundCandidateView(DomainModel):
     outbound_candidate_id: StableId
     company_id: StableId
@@ -164,6 +204,8 @@ class OutboundCandidateView(DomainModel):
     preliminary_assessment: AssessmentEnvelope | None = None
     application_id: StableId | None = None
     outreach_draft: NonBlankStr | None = None
+    public_contact_routes: tuple[PublicContactRouteView, ...] = ()
+    sourcing_audit: SourcingLoopAuditView | None = None
     updated_at: UTCDateTime
 
 
@@ -183,10 +225,14 @@ class OutreachRecord(DomainModel):
     occurred_at: UTCDateTime
 
 
+class PipelineRunView(PipelineRun):
+    sourcing_audit: SourcingLoopAuditView | None = None
+
+
 class RunAccepted(DomainModel):
     run_id: StableId
     status_url: NonBlankStr
-    run: PipelineRun
+    run: PipelineRunView
 
 
 class OpportunityTiming(DomainModel):
@@ -215,6 +261,8 @@ class OpportunityDetail(DomainModel):
     latest_recommendation: Recommendation | None = None
     human_decisions: tuple[Decision, ...] = ()
     related_run_ids: tuple[StableId, ...] = ()
+    public_contact_routes: tuple[PublicContactRouteView, ...] = ()
+    sourcing_audit: SourcingLoopAuditView | None = None
     timing: OpportunityTiming
 
 

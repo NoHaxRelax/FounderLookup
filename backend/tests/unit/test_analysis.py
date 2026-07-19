@@ -60,6 +60,23 @@ from founderlookup.domain.scoring import (
     TrustFactorKind,
     TrustFactorSignal,
 )
+from founderlookup.screening.axes import (
+    AxisSignal,
+    SignalReading,
+    assess_founder_axis,
+    assess_idea_vs_market_axis,
+    assess_market_axis,
+)
+from founderlookup.screening.founder_reads import (
+    EvidenceGrade,
+    FounderRead,
+    GapLabel,
+    GradedObservation,
+    ReadKind,
+    builder_fundability_gap,
+    builder_signal_read,
+    fundability_read,
+)
 from founderlookup.screening.inbound_analysis import (
     AdversarialValidationPort,
     AdversarialValidationResult,
@@ -81,23 +98,6 @@ from founderlookup.screening.inbound_analysis import (
     MemoSynthesisPort,
     MemoSynthesisResult,
     MissingFakeAnalysisError,
-)
-from founderlookup.screening.axes import (
-    AxisSignal,
-    SignalReading,
-    assess_founder_axis,
-    assess_idea_vs_market_axis,
-    assess_market_axis,
-)
-from founderlookup.screening.founder_reads import (
-    EvidenceGrade,
-    FounderRead,
-    GapLabel,
-    GradedObservation,
-    ReadKind,
-    builder_fundability_gap,
-    builder_signal_read,
-    fundability_read,
 )
 from founderlookup.screening.rubrics import (
     ContributionTier,

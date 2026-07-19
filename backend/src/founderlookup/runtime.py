@@ -55,6 +55,10 @@ from founderlookup.ingestion.mistral_ocr import (
     MistralOcrExtractor,
     MistralOcrSettings,
 )
+from founderlookup.ingestion.openai_structured import (
+    OpenAIStructuredPageExtractor,
+    OpenAIStructuredPolicy,
+)
 from founderlookup.ingestion.policy import PublicSourceCollectionPolicy
 from founderlookup.ingestion.sources.github import GitHubDeveloperActivitySource
 from founderlookup.ingestion.sources.hackernews import HackerNewsSocialSource
@@ -121,6 +125,9 @@ def _ocr_environment(settings: APISettings) -> dict[str, str] | None:
         ),
         "FOUNDERLOOKUP_MISTRAL_OCR_PURPOSE_CONFIRMED": _environment_bool(
             settings.mistral_ocr_purpose_confirmed
+        ),
+        "FOUNDERLOOKUP_MISTRAL_OCR_HACKATHON_PRIVATE_RISK_ACCEPTED": _environment_bool(
+            settings.mistral_ocr_hackathon_private_risk_accepted
         ),
     }
     if settings.mistral_ocr_region is not None:
@@ -217,6 +224,7 @@ def create_runtime_app(
     settings: APISettings | None = None,
     extractor: PdfExtractor | None = None,
     tavily_client: httpx.AsyncClient | None = None,
+    openai_client: httpx.AsyncClient | None = None,
     public_source_transport: HttpTransport | None = None,
     clock: Callable[[], datetime] = _utc_now,
 ) -> FastAPI:
@@ -392,6 +400,21 @@ def create_runtime_app(
         )
 
     if adapters:
+        structured_extractor = None
+        if configured.openai_structured_enabled:
+            assert configured.openai_api_key is not None
+            structured_extractor = OpenAIStructuredPageExtractor(
+                api_key=configured.openai_api_key,
+                policy=OpenAIStructuredPolicy(
+                    model=configured.openai_model,
+                    max_input_bytes=configured.openai_max_input_bytes,
+                    max_output_tokens=configured.openai_max_output_tokens,
+                    max_response_bytes=configured.openai_max_response_bytes,
+                    timeout_seconds=configured.openai_timeout_seconds,
+                ),
+                now=clock,
+                client=openai_client,
+            )
         sourcing_coordinator = MultiAdapterSourcingCoordinator(
             adapters=tuple(adapters),
             service=service,
@@ -405,6 +428,9 @@ def create_runtime_app(
             max_bytes=configured.sourcing_max_content_bytes,
             timeout_seconds=configured.sourcing_timeout_seconds,
             cache_ttl_seconds=configured.sourcing_cache_ttl_seconds,
+            structured_page_extractor=structured_extractor,
+            max_follow_up_rounds=configured.sourcing_max_follow_up_rounds,
+            max_discovery_calls=configured.sourcing_max_discovery_calls,
         )
     else:
         sourcing_coordinator = UnavailableSourcingCoordinator()
@@ -495,6 +521,9 @@ def create_runtime_app(
     application.state.demo_bootstrap = demo_bootstrap
     application.state.enabled_sourcing_adapters = tuple(
         binding.adapter_id for binding in adapters
+    )
+    application.state.openai_structured_enabled = (
+        configured.openai_structured_enabled and bool(adapters)
     )
     application.state.deterministic_query_planner = query_planner
     return application

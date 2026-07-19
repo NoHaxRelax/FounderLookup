@@ -40,13 +40,20 @@ def test_demo_seed_requires_explicit_true(monkeypatch: pytest.MonkeyPatch) -> No
     assert enabled.demo_seed_enabled is True
 
 
-def test_production_rejects_process_local_demo_seed() -> None:
-    with pytest.raises(ValidationError, match="demo seeding"):
+def test_production_demo_seed_requires_separate_explicit_acknowledgement() -> None:
+    with pytest.raises(ValidationError, match="demo-only acknowledgement"):
         APISettings(  # type: ignore[call-arg]
             _env_file=None,
             environment=RuntimeEnvironment.PRODUCTION,
             demo_seed_enabled=True,
         )
+    settings = APISettings(  # type: ignore[call-arg]
+        _env_file=None,
+        environment=RuntimeEnvironment.PRODUCTION,
+        demo_seed_enabled=True,
+        demo_seed_production_acknowledged=True,
+    )
+    assert settings.demo_seed_enabled is True
 
 
 def test_tavily_is_disabled_by_default_and_enabled_mode_requires_key() -> None:
@@ -68,6 +75,34 @@ def test_tavily_is_disabled_by_default_and_enabled_mode_requires_key() -> None:
         "research.example.org",
     )
     assert "fictional-settings-tavily-key" not in repr(enabled)
+
+
+def test_openai_is_explicitly_enabled_and_private_demo_use_is_separately_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    disabled = APISettings(_env_file=None)  # type: ignore[call-arg]
+    assert disabled.openai_structured_enabled is False
+    assert disabled.openai_api_key is None
+    assert disabled.openai_model == "gpt-5.6-luna"
+
+    with pytest.raises(ValidationError, match="server-side API key"):
+        APISettings(_env_file=None, openai_structured_enabled=True)  # type: ignore[call-arg]
+    with pytest.raises(ValidationError, match="risk acceptance"):
+        APISettings(  # type: ignore[call-arg]
+            _env_file=None,
+            openai_allow_private=True,
+        )
+
+    enabled = APISettings(  # type: ignore[call-arg]
+        _env_file=None,
+        openai_structured_enabled=True,
+        openai_api_key=SecretStr("fictional-openai-settings-key"),
+        openai_allow_private=True,
+        openai_hackathon_private_risk_accepted=True,
+    )
+    assert enabled.openai_structured_enabled is True
+    assert "fictional-openai-settings-key" not in repr(enabled)
 
 
 def test_public_source_adapters_are_independent_opt_ins_with_server_only_token() -> None:

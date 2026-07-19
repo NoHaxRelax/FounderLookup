@@ -187,16 +187,21 @@ class MistralPrivateDataPolicy(DomainModel):
     region_confirmed: bool = False
     purpose: NonBlankStr | None = None
     purpose_confirmed: bool = False
+    hackathon_private_risk_accepted: bool = False
 
     def permits_private_transfer(self) -> bool:
-        return (
-            self.allow_private
-            and self.training_opt_out_confirmed
+        confirmed_provider_controls = (
+            self.training_opt_out_confirmed
             and self.retention_posture is not RetentionPosture.UNCONFIRMED
             and self.region is not None
             and self.region_confirmed
+        )
+        explicit_demo_risk_path = self.hackathon_private_risk_accepted
+        return (
+            self.allow_private
             and self.purpose is not None
             and self.purpose_confirmed
+            and (confirmed_provider_controls or explicit_demo_risk_path)
         )
 
 
@@ -272,6 +277,11 @@ class MistralOcrSettings(DomainModel):
                 purpose_confirmed=_environment_bool(
                     source,
                     f"{_ENV_PREFIX}PURPOSE_CONFIRMED",
+                    default=False,
+                ),
+                hackathon_private_risk_accepted=_environment_bool(
+                    source,
+                    f"{_ENV_PREFIX}HACKATHON_PRIVATE_RISK_ACCEPTED",
                     default=False,
                 ),
             )
