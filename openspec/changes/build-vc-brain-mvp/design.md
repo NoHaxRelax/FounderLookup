@@ -360,13 +360,15 @@ The linked color-theory video supports three useful principles: choose saturatio
 
 Neumorphic shadow depth is a progressive decorative layer for major surface grouping. Interactive controls retain semantic labels, visible boundaries, non-color states, and explicit focus outlines. Forced-colors mode, print, or unsupported shadows must leave the interface fully understandable. Dense tables and evidence views prioritize legibility over softness.
 
-The frontend technology remains open. Whatever is selected must meet the UX spec's WCAG 2.2 AA, keyboard, responsive reflow, forced-colors, and reduced-motion requirements.
+The MVP frontend uses React with TypeScript and Vite. React provides enough structure for the four stateful demo surfaces, typed API projections, accessible interaction state, and parallel component work without the extra application framework surface that the hackathon does not need. All React source components use `.tsx`; `.jsx` is not part of the project convention. The implementation must meet the UX spec's WCAG 2.2 AA, keyboard, responsive reflow, forced-colors, and reduced-motion requirements.
 
 **Alternatives considered:**
 
 - Full neumorphism on all controls: rejected because low-contrast boundaries and shadow-only states conflict with analytical density and accessibility.
 - Generic neutral gray plus bright blue: rejected as visually sterile and unrelated to the requested design direction.
 - Decorative Chinese motifs: not required; the design takes palette and hierarchy principles rather than turning the interface into cultural pastiche.
+- Lit: rejected for the MVP because its deliberately small view layer would leave more application structure, state conventions, and component integration for the two-person team to establish during the hackathon.
+- Preact: viable, but not selected because bundle-size savings are less important here than React's familiar ecosystem and handoff path; the application avoids React-specific coupling in its typed API client.
 
 ### 12. Test at module interfaces and against decision fixtures
 
@@ -523,15 +525,18 @@ This is a greenfield change, so migration means staged construction rather than 
 
 Each stage remains runnable with deterministic fixtures. External adapters and model-backed analysis can be disabled to fall back to the last deterministic state. Schema and score revisions are append-only, so rollback selects an earlier version rather than rewriting history.
 
-## Open Questions
+## Recorded P0 Gate Decisions
 
-1. **Orchestration resolved (no bake-off); investment-intelligence model provider still to pin:** Orchestration for P0 is plain Python with a single model-provider SDK; no LangGraph, LangChain, or LlamaIndex is adopted, and the orchestration seam is preserved so a framework can be added later if a concrete need appears. The specific investment-intelligence model provider is pinned when credentials are set and does not change the framework-neutral contracts; the ingestion-only Mistral OCR selection does not answer this.
-2. Which frontend technology best fits the team and hackathon deadline while satisfying the UX specification?
-3. **Resolved:** No generic web-discovery provider (Tavily or Exa) is adopted for P0. Sourcing anchors on free source-specific adapters behind the provider-neutral seam, which is built for later expansion to a generic provider without changing domain contracts. A two-provider runtime belongs in a later change.
-4. Which direct/source-specific outbound connector should serve as or complement the live discovery path? GitHub is the leading candidate because it can verify developer activity at the source.
-5. What numeric rubric and calibration set should define Founder Score and Claim Trust Score factors without presenting false precision?
-6. Which source domains, provider budget, refresh cadence, and retention policy are approved for the demonstration?
-7. What minimal follow-up information, if any, is genuinely required after company name plus deck to reach decision readiness confidently?
+- **Orchestration:** P0 uses plain Python with a single human-approved investment-intelligence model-provider SDK. LangGraph, LangChain, and LlamaIndex are not adopted for P0; framework-neutral interfaces remain so a framework can be proposed later if a concrete requirement appears. This resolves orchestration only. The named investment-intelligence model provider remains behind the mandatory human gate, and the ingestion-only Mistral OCR approval does not satisfy it.
+- **Generic web discovery:** P0 adopts no generic web-discovery provider. Tavily, Exa, and other generic providers remain outside the runtime; sourcing uses provider-neutral, source-specific OSINT adapters. Adding a generic provider requires a new recorded human decision, and a two-generic-provider runtime remains a later OpenSpec change.
+
+## Remaining Open Questions
+
+1. **Mandatory human decision:** Which named investment-intelligence model provider will be approved after its credentials, terms, private-data policy, structured-output reliability, latency, cost, and evaluation evidence are reviewed?
+2. **Mandatory human decision:** Which implemented source-specific adapter or adapter set will be approved for live endpoint validation and the bounded P0 discovery demonstration? GitHub is the leading authoritative developer-activity path; OpenAlex, Semantic Scholar, PatentsView, and Hacker News are category-specific complements.
+3. What calibration corpus and acceptance thresholds should promote `claim-trust-rubric.v0`, `founder-score-rubric.v0`, and `axis-rubric.v0` from provisional demonstration outputs to decision-grade use without false precision?
+4. Which source domains, per-adapter request and cost budgets, refresh cadence, and retention policy are approved for the demonstration?
+5. What minimal follow-up information, if any, is genuinely required after company name plus deck to reach decision readiness confidently?
 
 ## Deferred Follow-up Backlog
 

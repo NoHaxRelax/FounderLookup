@@ -1,5 +1,5 @@
-"""ASGI entry point for the FounderLookup API."""
+"""ASGI entry point for the safe local FounderLookup runtime."""
 
-from founderlookup.api import create_app
+from founderlookup.runtime import create_runtime_app
 
-app = create_app()
+app = create_runtime_app()
