@@ -134,3 +134,20 @@ PURSUE_MIN_POSITIVE_AXES confident positives (a thin third axis never blocks) an
 monotonicity regression test before committing. 19 tests; full suite 246 green. Commit ef0219c.
 The outbound spine is now end to end: sources -> identity resolution -> rubrics + three axes
 + builder/fundability + confidence -> conviction + preliminary envelope. No NEEDS ELIAS.
+
+## 2026-07-19, cycle 8
+Evaluation harness (calibration + predictive-validity on fixtures), the self-improvement /
+Area-of-Research-3 deliverable in code. `screening/evaluation.py`, deterministic + versioned
+(`eval-harness.v0`), single entry `evaluate_predictions` over fixture EvalRecords that pair a
+past prediction with a realized outcome. Rank agreement is Kendall tau-b with the full
+pair-count breakdown, explicitly None (never a fabricated 0/1) when undefined; confidence-band
+coverage is a plain fraction with denominator exposed, band-less records excluded and counted,
+signed gap vs the nominal level; calibration is REUSED verbatim from confidence.py; baseline
+lift compares system vs a naive ranking apples-to-apples on the shared subset; per-subgroup
+breakdowns flag thin subgroups rather than dropping them. Pure over fixtures (no leakage, no
+rescaling), permutation-invariant, boundary-guarded. Adversarial verify checked tau-b against
+scipy across ~658k datasets (0 genuine mismatches, and more faithful at half-way rounding).
+35 tests; full suite 281 green. Commit ffb1a44.
+This is the shipped first half of the outcome-feedback loop (runs on fixture outcomes now;
+real outcomes remain the aim), which moves the self-improvement pillar toward "shipped" for
+the submission. No NEEDS ELIAS.
